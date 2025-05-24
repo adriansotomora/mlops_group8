@@ -1,10 +1,9 @@
 # This file is used to set up the parameters for data loading, logging, and other settings.
 
 data_source:
-  raw_path: "data/raw/Songs_2025.xlsx" # Relative or absolute path to data file
-  processed_path: "./data/processed/opiod_processed_data.csv" # Path to save processed data
-  type: "excel"                      # Data file type: 'csv' or 'excel'
-  sheet_name: "spotify songs"             # Only used if type == 'excel'
+  raw_path: "data/raw/Songs_2025.csv" # Relative or absolute path to data file
+  processed_path: "./data/processed/Songs_2025_processed.csv" # Path to save processed data
+  type: "csv"                      # Data file type: 'csv' or 'excel'
   delimiter: ","                   # Only used if type == 'csv'
   header: 0                        # Row number to use as column names (0-indexed), update if needed
   encoding: "utf-8"                # File encoding (utf-8 covers most cases)
@@ -126,92 +125,90 @@ data_validation:
   report_path: "logs/validation_report.json"
   schema:
     columns:
-      - name: "ID"
+      - name: "year"
         dtype: "int"
         required: true
-        min: 1
-      - name: "OD"
-        dtype: "int"
+        min: 2000
+        max: 2025
+      - name: "track_name"
+        dtype: "str"
         required: true
-        allowed_values: [0, 1]
-      - name: "Low_inc"
-        dtype: "int"
-        required: true
-        allowed_values: [0, 1]
-      - name: "SURG"
-        dtype: "int"
-        required: true
-        allowed_values: [0, 1]
-      - name: "rx ds"
+      - name: "track_popularity"
         dtype: "int"
         required: true
         min: 0
-        max: 2000    # Set upper bound based on domain knowledge; adjust as needed
-      - name: "A"
+        max: 100
+      - name: "album"
+        dtype: "str"
+        required: true
+      - name: "artist_name"
+        dtype: "str"
+        required: true
+      - name: "artist_genres"
+        dtype: "str"
+        required: true
+      - name: "artist_popularity"
         dtype: "int"
         required: true
-        allowed_values: [0, 1]
-      - name: "B"
-        dtype: "int"
+        min: 0
+        max: 100
+      - name: "energy"
+        dtype: "float"
+        required: false
+        min: 0.0519
+        max: 0.999
+      - name: "key"
+        dtype: "float"
         required: true
-        allowed_values: [0, 1]
-      - name: "C"
-        dtype: "int"
+        min: 0.0
+        max: 11.0
+      - name: "loudness"
+        dtype: "float"
         required: true
-        allowed_values: [0, 1]
-      - name: "D"
-        dtype: "int"
+        min: -56.0
+        max: 132.0
+      - name: "mode"
+        dtype: "float"
         required: true
-        allowed_values: [0, 1]
-      - name: "E"
-        dtype: "int"
+        min: 0.0
+        max: 1.0
+      - name: "speechiness"
+        dtype: "float"
         required: true
-        allowed_values: [0, 1]
-      - name: "F"
-        dtype: "int"
+        min: 0.0225
+        max: 0.576
+      - name: "acousticness"
+        dtype: "float"
         required: true
-        allowed_values: [0, 1]
-      - name: "H"
-        dtype: "int"
+        min: 0.0000129
+        max: 0.978
+      - name: "instrumentalness"
+        dtype: "float"
         required: true
-        allowed_values: [0, 1]
-      - name: "I"
-        dtype: "int"
+        min: 0.0
+        max: 0.985
+      - name: "liveness"
+        dtype: "float"
         required: true
-        allowed_values: [0, 1]
-      - name: "J"
-        dtype: "int"
+        min: 0.021
+        max: 0.843
+      - name: "valence"
+        dtype: "float"
         required: true
-        allowed_values: [0, 1]
-      - name: "K"
-        dtype: "int"
+        min: 0.0377
+        max: 0.974
+      - name: "tempo"
+        dtype: "float"
         required: true
-        allowed_values: [0, 1]
-      - name: "L"
-        dtype: "int"
+        min: 60.019
+        max: 210.857
+      - name: "duration_ms"
+        dtype: "float"
         required: true
-        allowed_values: [0, 1]
-      - name: "M"
-        dtype: "int"
+        min: 97393.0
+        max: 688453.0
+      - name: "danceability"
+        dtype: "float"
         required: true
-        allowed_values: [0, 1]
-      - name: "N"
-        dtype: "int"
-        required: true
-        allowed_values: [0, 1]
-      - name: "R"
-        dtype: "int"
-        required: true
-        allowed_values: [0, 1]
-      - name: "S"
-        dtype: "int"
-        required: true
-        allowed_values: [0, 1]
-      - name: "T"
-        dtype: "int"
-        required: true
-        allowed_values: [0, 1]
-      - name: "V"
-        dtype: "int"
-        required: true
-        allowed_values: [0, 1]
+        min: 0.0
+        max: 1.0
