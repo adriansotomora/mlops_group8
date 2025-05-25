@@ -37,6 +37,7 @@ def _validate_column(
         if col_schema.get("required", True):
             msg = f"Missing required column: {col}"
             errors.append(msg)
+            print(f"ERROR ADDED: {msg}")
             col_report["status"] = "missing"
             col_report["error"] = msg
         else:
@@ -58,6 +59,8 @@ def _validate_column(
         col_report["dtype"] = str(col_series.dtype)
         col_report["dtype_expected"] = dtype_expected
         col_report["error"] = msg
+        report[col] = col_report
+        return  # Stop further checks if dtype is wrong
 
     # Missing values check
     missing_count = col_series.isnull().sum()
@@ -94,46 +97,41 @@ def _validate_column(
             errors.append(msg)
             col_report["above_max"] = int(above)
 
-
-def validate_data(
-    dataframe: pd.DataFrame,
-    config_dict: Dict[str, Any]
-) -> None:
-    """
-    Validate the dataframe according to the config schema.
-    """
+def validate_data(dataframe, config_dict):
     dv_cfg = config_dict.get("data_validation", {})
+    report_path = str(dv_cfg.get("report_path", "logs/validation_report.json"))
     enabled = dv_cfg.get("enabled", True)
+    errors, warnings = [], []
+    report = {}
+
     if not enabled:
         logger.info("Data validation is disabled in config.")
         return
 
     schema = dv_cfg.get("schema", {}).get("columns", [])
+    dir_ = os.path.dirname(report_path)
+
     if not schema:
         logger.warning(
             "No data_validation.schema.columns defined in config. "
             "Skipping validation."
         )
+        if dir_:
+            os.makedirs(dir_, exist_ok=True)
+        with open(report_path, "w", encoding="utf-8") as report_file:
+            json.dump({
+                "result": "pass",
+                "errors": [],
+                "warnings": [],
+                "details": {}
+            }, report_file, indent=2)
         return
-
-    action_on_error = dv_cfg.get("action_on_error", "raise").lower()
-    report_path = dv_cfg.get("report_path", "logs/validation_report.json")
-    errors, warnings = [], []
-    report = {}
 
     # Validate each column as per schema
     for col_schema in schema:
         _validate_column(dataframe, col_schema, errors, warnings, report)
 
-    # Save validation report (teaching: critical for reproducibility & audits)
-    os.makedirs(os.path.dirname(report_path), exist_ok=True)
-    with open(report_path, "w", encoding="utf-8") as report_file:
-        json.dump({
-            "result": "fail" if errors else "pass",
-            "errors": errors,
-            "warnings": warnings,
-            "details": report
-        }, report_file, indent=2)
+    action_on_error = dv_cfg.get("action_on_error", "raise").lower()
 
     # Log summary
     if errors:
@@ -150,6 +148,17 @@ def validate_data(
         for warn in warnings:
             logger.warning("%s", warn)
 
+    # --- WRITE THE REPORT HERE, ALWAYS ---
+    if dir_:
+        os.makedirs(dir_, exist_ok=True)
+    with open(report_path, "w", encoding="utf-8") as report_file:
+        json.dump({
+            "result": "fail" if errors else "pass",
+            "errors": errors,
+            "warnings": warnings,
+            "details": report
+        }, report_file, indent=2)
+
     # Teaching: You want strict validation in prod, warnings for research
     if errors:
         if action_on_error == "raise":
@@ -160,7 +169,6 @@ def validate_data(
             logger.warning(
                 "Data validation errors detected but proceeding as per config."
             )
-
 
 if __name__ == "__main__":
     import sys
