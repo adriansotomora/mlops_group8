@@ -1,7 +1,7 @@
 """
 data_loader.py
 
-Modular data ingestion utility for CSV and Excel files.
+Modular data ingestion utility for CSV files.
 - Loads configuration from config.yaml
 - Loads secrets from .env (using python-dotenv)
 - Supports robust error handling and logging (configured by main.py)
@@ -32,8 +32,6 @@ def load_env(env_path: str = ".env"):
 
 def load_data(
     path: str,
-    file_type: str = "csv",
-    sheet_name: Optional[str] = None,
     delimiter: str = ",",
     header: int = 0,
     encoding: str = "utf-8"
@@ -45,22 +43,8 @@ def load_data(
         logger.error(f"Data file does not exist: {path}")
         raise FileNotFoundError(f"Data file not found: {path}")
     try:
-        if file_type == "csv":
-            df = pd.read_csv(path, delimiter=delimiter,
-                             header=header, encoding=encoding)
-            
-        elif file_type == "excel":
-            # Check available sheets before trying to load
-            xls = pd.ExcelFile(path, engine="openpyxl")
-            if sheet_name not in xls.sheet_names:
-                logger.error(f"Sheet '{sheet_name}' not found in Excel file. Available sheets: {xls.sheet_names}")
-                raise ValueError(f"Sheet '{sheet_name}' not found in Excel file. Available sheets: {xls.sheet_names}")
-            df = pd.read_excel(xls, sheet_name=sheet_name, header=header)
-
-        else:
-            logger.error(f"Unsupported file type: {file_type}")
-            raise ValueError(f"Unsupported file type: {file_type}")
-        logger.info(f"Loaded data from {path} ({file_type}), shape={df.shape}")
+        df = pd.read_csv(path, delimiter=delimiter, header=header, encoding=encoding)
+        logger.info(f"Loaded data from {path} (csv), shape={df.shape}")
         return df
     except Exception as e:
         logger.exception(f"Failed to load data: {e}")
@@ -75,6 +59,10 @@ def get_data(
     load_env(env_path)
     config = load_config(config_path)
     data_cfg = config.get("data_source", {})
+    file_type = data_cfg.get("type", "csv").lower()
+    if file_type != "csv":
+        logger.error(f"Unsupported file type: {file_type}")
+        raise ValueError(f"Unsupported file type: {file_type}")
     if data_stage == "raw":
         path = data_cfg.get("raw_path")
     elif data_stage == "processed":
@@ -89,8 +77,6 @@ def get_data(
             f"No valid data path specified in configuration for data_stage='{data_stage}'.")
     df = load_data(
         path=path,
-        file_type=data_cfg.get("type", "csv"),
-        sheet_name=data_cfg.get("sheet_name"),
         delimiter=data_cfg.get("delimiter", ","),
         header=data_cfg.get("header", 0),
         encoding=data_cfg.get("encoding", "utf-8"),
