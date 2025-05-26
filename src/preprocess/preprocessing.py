@@ -1,7 +1,10 @@
 import os
 import logging
 import yaml
+import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
 import joblib
 
 
@@ -72,6 +75,56 @@ def scale_columns(df, columns, method, logger):
     df_scaled = df.copy()
     df_scaled[columns] = scaler.fit_transform(df_scaled[columns])
     return df_scaled, scaler
+
+
+def build_preprocessing_pipeline(config):
+    """Create a scikit-learn preprocessing pipeline based on config."""
+    scale_cfg = config.get("preprocessing", {}).get("scale", {})
+    columns = scale_cfg.get("columns", [])
+    method = scale_cfg.get("method", "minmax")
+    scaler = MinMaxScaler() if method == "minmax" else None
+    if scaler is None:
+        raise ValueError(f"Unsupported scaling method: {method}")
+
+    transformer = ColumnTransformer([
+        ("scale", scaler, columns)
+    ], remainder="passthrough")
+
+    pipeline = Pipeline(steps=[("transform", transformer)])
+    return pipeline
+
+
+def get_output_feature_names(preprocessor, input_features, config):
+    """Return output feature names after preprocessing."""
+    try:
+        return list(preprocessor.get_feature_names_out(input_features))
+    except Exception:
+        scale_cols = config.get("preprocessing", {}).get("scale", {}).get("columns", [])
+        passthrough = [c for c in input_features if c not in scale_cols]
+        return scale_cols + passthrough
+
+
+def run_preprocessing_pipeline(df, config):
+    """Apply dropping, outlier removal, and scaling to the dataframe."""
+    logger = logging.getLogger(__name__)
+    pre_cfg = config.get("preprocessing", {})
+
+    df_proc = drop_columns(df, pre_cfg.get("drop_columns", []), logger)
+
+    out_cfg = pre_cfg.get("outlier_removal", {})
+    if out_cfg.get("enabled", False):
+        df_proc = remove_outliers_iqr(
+            df_proc,
+            out_cfg.get("features", []),
+            out_cfg.get("iqr_multiplier", 1.5),
+            logger,
+        )
+
+    pipeline = build_preprocessing_pipeline(config)
+    df_scaled = pipeline.fit_transform(df_proc)
+    out_cols = get_output_feature_names(pipeline, list(df_proc.columns), config)
+    df_scaled = pd.DataFrame(df_scaled, columns=out_cols, index=df_proc.index)
+    return df_scaled, pipeline
 
 
 def log_and_save(df, path, logger, msg):

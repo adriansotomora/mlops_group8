@@ -19,16 +19,20 @@ data_split:
   valid_size: 0.2
   random_state: 42
 
-model:
-  active:  # Options: logistic_regression, kmeans
-
-  logistic_regression:
-    save_path: models/logistic_regression.pkl
-    params:
-
-  knn:
-    save_path: models/knn.pkl
-    params:
+raw_features:
+  - danceability
+  - energy
+  - key
+  - loudness
+  - mode
+  - speechiness
+  - acousticness
+  - instrumentalness
+  - liveness
+  - valence
+  - tempo
+  - duration_ms
+  - artist_popularity
 
 features:
   exclude:
@@ -76,9 +80,27 @@ features:
       degree: 2
       include_bias: false
 
+model:
+  active: linear_regression
+
+  linear_regression:
+    save_path: models/linear_regression.pkl
+    params: {}
+  
+  logistic_regression:
+    save_path: models/logistic_regression.pkl
+    params: {}
+
+  knn:
+    save_path: models/knn.pkl
+    params: {}
+
 target: track_popularity
 
 metrics:
+  - rmse
+  - mae
+  - r2
 
 preprocessing:
   drop_columns:

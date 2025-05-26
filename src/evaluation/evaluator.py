@@ -111,3 +111,51 @@ def evaluate_classification(
     logger.info(f"Evaluation metrics{split_label}: {rounded_results}")
 
     return results
+
+
+def evaluate_regression(
+    model,
+    X,
+    y,
+    config: Dict[str, Any],
+    save_path: Optional[str] = None,
+    split: Optional[str] = None,
+) -> Dict[str, float]:
+    """Evaluate a regression model according to the metrics in config."""
+    from sklearn.metrics import (
+        mean_absolute_error,
+        mean_squared_error,
+        r2_score,
+    )
+
+    y_pred = model.predict(X)
+
+    results = {}
+    for metric in config.get("metrics", []):
+        m = metric.lower()
+        if m in ["mae", "mean absolute error"]:
+            results["MAE"] = mean_absolute_error(y, y_pred)
+        elif m in ["mse", "mean squared error"]:
+            results["MSE"] = mean_squared_error(y, y_pred)
+        elif m in ["rmse", "root mean squared error"]:
+            results["RMSE"] = mean_squared_error(y, y_pred, squared=False)
+        elif m in ["r2", "r2 score", "r^2"]:
+            results["R2"] = r2_score(y, y_pred)
+
+    if save_path is not None:
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        with open(save_path, "w") as f:
+            json.dump(results, f, indent=2)
+        logger.info(f"Evaluation results saved to {save_path}")
+
+    def round_metrics(metrics_dict, ndigits=2):
+        return {
+            k: (round(float(v), ndigits) if isinstance(v, (float, int)) else v)
+            for k, v in metrics_dict.items()
+        }
+
+    rounded_results = round_metrics(results)
+    split_label = f" [{split}]" if split else ""
+    logger.info(f"Evaluation metrics{split_label}: {rounded_results}")
+
+    return results

@@ -14,14 +14,14 @@ import pickle
 from typing import Dict, Any
 import pandas as pd
 from sklearn.tree import DecisionTreeClassifier
-from sklearn.linear_model import LogisticRegression
+from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import (
     accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, confusion_matrix
 )
-from src.preprocess.preprocessing import build_preprocessing_pipeline, get_output_feature_names, run_preprocessing_pipeline
-from src.evaluation.evaluator import evaluate_classification
+from src.preprocess.preprocessing import build_preprocessing_pipeline, get_output_feature_names
+from src.evaluation.evaluator import evaluate_regression
 
 
 logger = logging.getLogger(__name__)
@@ -30,6 +30,7 @@ MODEL_REGISTRY = {
     "decision_tree": DecisionTreeClassifier,
     "logistic_regression": LogisticRegression,
     "random_forest": RandomForestClassifier,
+    "linear_regression": LinearRegression,
 }
 
 
@@ -84,27 +85,29 @@ def format_metrics(metrics: dict, ndigits: int = 2) -> dict:
 
 
 def run_model_pipeline(df: pd.DataFrame, config: Dict[str, Any]):
-    df = run_preprocessing_pipeline(df, config)
-    assert config["target"] in df.columns, f"{config['target']} column not found in DataFrame after preprocessing"
-
-    # 1. Split data using only raw features (present in the original file)
-    raw_features = config.get("raw_features", [])
+    logger.info("Starting model pipeline")
     target = config["target"]
-    split_cfg = config["data_split"]
-    input_features_raw = [f for f in raw_features if f != target]
+    raw_features = config.get("raw_features", [c for c in df.columns if c != target])
+    split_cfg = config.get("data_split", {})
 
-    X = df[input_features_raw]
+    X = df[raw_features]
     y = df[target]
     test_size = split_cfg.get("test_size", 0.2)
     valid_size = split_cfg.get("valid_size", 0.2)
     random_state = split_cfg.get("random_state", 42)
 
     X_train, X_temp, y_train, y_temp = train_test_split(
-        X, y, test_size=(test_size + valid_size), random_state=random_state, stratify=y
+        X,
+        y,
+        test_size=test_size + valid_size,
+        random_state=random_state,
     )
     rel_valid = valid_size / (test_size + valid_size)
     X_valid, X_test, y_valid, y_test = train_test_split(
-        X_temp, y_temp, test_size=rel_valid, random_state=random_state, stratify=y_temp
+        X_temp,
+        y_temp,
+        test_size=rel_valid,
+        random_state=random_state,
     )
     # --- Save raw data splits ---
     splits_dir = config.get("artifacts", {}).get("splits_dir", "data/splits")
@@ -116,26 +119,16 @@ def run_model_pipeline(df: pd.DataFrame, config: Dict[str, Any]):
     X_test.assign(**{target: y_test}
                   ).to_csv(os.path.join(splits_dir, "test.csv"), index=False)
 
-    # 2. Fit preprocessing pipeline on X_train, transform all splits
+    
     preprocessor = build_preprocessing_pipeline(config)
     X_train_pp = preprocessor.fit_transform(X_train)
     X_valid_pp = preprocessor.transform(X_valid)
     X_test_pp = preprocessor.transform(X_test)
 
-    # 3. Create DataFrames with engineered feature columns
-    engineered_features = config.get("features", {}).get("engineered", [])
-    out_cols = get_output_feature_names(
-        preprocessor, input_features_raw, config)
+    out_cols = get_output_feature_names(preprocessor, raw_features, config)
     X_train_pp = pd.DataFrame(X_train_pp, columns=out_cols)
     X_valid_pp = pd.DataFrame(X_valid_pp, columns=out_cols)
     X_test_pp = pd.DataFrame(X_test_pp, columns=out_cols)
-
-    # 4. Use only engineered features for modeling
-    input_features = [
-        f for f in engineered_features if f in X_train_pp.columns]
-    X_train_pp = X_train_pp[input_features]
-    X_valid_pp = X_valid_pp[input_features]
-    X_test_pp = X_test_pp[input_features]
 
     # Save processed data splits
     processed_dir = config.get("artifacts", {}).get(
@@ -155,7 +148,7 @@ def run_model_pipeline(df: pd.DataFrame, config: Dict[str, Any]):
 
     # Train model
     model_config = config["model"]
-    active = model_config.get("active", "decision_tree")
+    active = model_config.get("active", "linear_regression")
     active_model_cfg = model_config[active]
     model_type = active
     params = active_model_cfg.get("params", {})
@@ -166,7 +159,7 @@ def run_model_pipeline(df: pd.DataFrame, config: Dict[str, Any]):
         "model_path", "models/model.pkl")
     save_artifact(model, model_path)
 
-    active = model_config.get("active", "decision_tree")
+    active = model_config.get("active", "linear_regression")
     algo_model_path = model_config.get(active, {}).get("save_path", f"models/{active}.pkl")
     save_artifact(model, algo_model_path)
 
@@ -174,10 +167,10 @@ def run_model_pipeline(df: pd.DataFrame, config: Dict[str, Any]):
     artifacts_cfg = config.get("artifacts", {})
     metrics_path = artifacts_cfg.get("metrics_path", "models/metrics.json")
 
-    results_valid = evaluate_classification(
+    results_valid = evaluate_regression(
         model, X_valid_pp.values, y_valid, config, split="validation")
-    results_test = evaluate_classification(
-        model, X_test_pp.values, y_test,  config, split="test")
+    results_test = evaluate_regression(
+        model, X_test_pp.values, y_test, config, split="test")
 
     def round_metrics(metrics_dict, ndigits=2):
         rounded = {}
