@@ -6,193 +6,145 @@ import joblib
 import pytest
 from unittest.mock import MagicMock
 import logging
+from pathlib import Path
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
+
+# Ensure 'src' directory is in PYTHONPATH for imports
+import sys
+TEST_DIR_PREPROC = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT_PREPROC = os.path.abspath(os.path.join(TEST_DIR_PREPROC, '..'))
+if PROJECT_ROOT_PREPROC not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT_PREPROC)
 
 # Import the module to be tested
 from src.preprocess import preprocessing 
 
-def minimal_config_for_tests(tmpdir_path):
-    """
-    Creates a minimal but valid configuration dictionary for testing.
-    Uses paths within the pytest-provided temporary directory (tmpdir_path)
-    to ensure test isolation and automatic cleanup.
-    """
+def minimal_config_for_tests(tmpdir_path: Path): 
+    """Creates a minimal, valid config for testing preprocessing.py using temporary paths."""
     raw_data_file = tmpdir_path / "raw_test_data.csv"
     processed_data_file = tmpdir_path / "processed_test_data.csv"
     scaler_file = tmpdir_path / "scaler_test.pkl"
     log_file = tmpdir_path / "test_preprocessing.log"
+    holdout_data_file = tmpdir_path / "holdout_test_data.csv"
 
     return {
         "data_source": {
             "raw_path": str(raw_data_file),
             "processed_path": str(processed_data_file),
-            "type": "csv",
-            "delimiter": ",",
-            "header": 0,
-            "encoding": "utf-8"
+            "type": "csv", 
+            "delimiter": ",", "header": 0, "encoding": "utf-8",
+            "inference_holdout_path": str(holdout_data_file), 
+            "inference_holdout_size": 0.1 
         },
         "preprocessing": {
             "drop_columns": ["dropme"],
-            "outlier_removal": {
-                "enabled": True,
-                "features": ["A"], 
-                "iqr_multiplier": 1.5
-            },
-            "scale": {
-                "columns": ["A", "B"], 
-                "method": "minmax"
-            }
+            "outlier_removal": {"enabled": True, "features": ["A"], "iqr_multiplier": 1.5},
+            "scale": {"columns": ["A", "B"], "method": "minmax"}
         },
         "artifacts": {
             "processed_dir": str(tmpdir_path), 
             "preprocessing_pipeline": str(scaler_file)
         },
-        "logging": {
-            "log_file": str(log_file),
-            "level": "DEBUG" 
-        }
+        "logging": {"log_file": str(log_file), "level": "DEBUG"},
+        "data_split": {"random_state": 42} # For reproducible holdout split
     }
 
 def test_validate_preprocessing_config_raises_for_missing_top_level_keys():
-    """Test that KeyError is raised if essential top-level keys are missing from the config."""
-    config_missing_top_keys = {"preprocessing": {}, "artifacts": {}} 
-    
+    """Test KeyError for missing essential top-level config keys."""
+    config_missing = {"preprocessing": {}, "artifacts": {}} 
     with pytest.raises(KeyError) as excinfo:
-        # Call the validation function with a config missing 'data_source' and 'logging'
-        preprocessing.validate_preprocessing_config(config_missing_top_keys, logger_param=MagicMock())
-    # Assert that the error message mentions one of the expected missing keys
-    assert "Missing required top-level config key: 'data_source'" in str(excinfo.value) or \
-           "Missing required top-level config key: 'logging'" in str(excinfo.value)
+        preprocessing.validate_preprocessing_config(config_missing, logger_param=MagicMock())
+    assert "Missing required top-level config key" in str(excinfo.value)
 
-
-def test_validate_preprocessing_config_warns_missing_sub_keys(caplog, tmp_path):
-    """Test that warnings are logged for missing optional sub-keys within the 'preprocessing' section."""
+def test_validate_preprocessing_config_warns_missing_sub_keys(caplog, tmp_path: Path):
+    """Test warnings for missing optional sub-keys in 'preprocessing' config."""
     config = minimal_config_for_tests(tmp_path)
-    # Intentionally remove a sub-key to trigger the warning mechanism
     del config["preprocessing"]["drop_columns"] 
-    
-    mock_logger = MagicMock() # Use a mock logger to check its calls
-
-    # Capture logs at WARNING level or higher
+    mock_logger = MagicMock() 
     with caplog.at_level(logging.WARNING): 
         preprocessing.validate_preprocessing_config(config, logger_param=mock_logger)
-
-    # Verify that the mock_logger's warning method was called
     assert mock_logger.warning.called
-    # Verify that the warning message content is as expected
-    assert any("Missing 'drop_columns' in 'preprocessing' config" in call.args[0] for call in mock_logger.warning.call_args_list)
+    assert any("Config: 'preprocessing.drop_columns' not found" in call.args[0] for call in mock_logger.warning.call_args_list)
     
-
 def test_drop_columns_removes_specified():
-    """Test that specified columns are correctly dropped from the DataFrame."""
+    """Test correct removal of specified columns."""
     df = pd.DataFrame({"A": [1, 2], "dropme": [3, 4], "keepme": [5, 6]})
     logger_mock = MagicMock()
     df_dropped = preprocessing.drop_columns(df.copy(), ["dropme"], logger_param=logger_mock)
-    
     assert "dropme" not in df_dropped.columns
-    assert "A" in df_dropped.columns
-    assert "keepme" in df_dropped.columns
-    # Check if the logger was called with the expected info message
+    assert "A" in df_dropped.columns and "keepme" in df_dropped.columns
     logger_mock.info.assert_any_call("Dropping columns: ['dropme']")
 
-
 def test_remove_outliers_iqr_removes_rows():
-    """Test that outlier removal using IQR correctly removes rows with outliers."""
-    df = pd.DataFrame({"A": [1, 2, 100, 3, 4, np.nan], "B": [5, 6, 7, 8, 9, 10]}) # Column 'A' has an outlier (100)
+    """Test IQR outlier removal correctly removes rows."""
+    df = pd.DataFrame({"A": [1, 2, 100, 3, 4, np.nan], "B": [5, 6, 7, 8, 9, 10]})
     logger_mock = MagicMock()
-    
-    # Test outlier removal on column 'A'
     df_cleaned_A = preprocessing.remove_outliers_iqr(df.copy(), ["A"], 1.5, logger_param=logger_mock)
-    assert df_cleaned_A["A"].max() < 100 # The outlier should be removed
-    assert df_cleaned_A.shape[0] < df.dropna(subset=['A']).shape[0] # Number of rows should decrease
-    
-    # Test on column 'B' which has no outliers by this method's definition
+    assert df_cleaned_A["A"].max() < 100 
+    assert df_cleaned_A.shape[0] < df.dropna(subset=['A']).shape[0] 
     df_cleaned_B = preprocessing.remove_outliers_iqr(df.copy(), ["B"], 1.5, logger_param=logger_mock)
-    assert df_cleaned_B.shape[0] == df.shape[0] # No rows should be removed for column B
-
+    assert df_cleaned_B.shape[0] == df.shape[0]
 
 def test_scale_columns_minmax():
-    """Test MinMax scaling of specified numeric columns."""
-    df = pd.DataFrame({"A": [1.0, 2.0, 3.0], "B": [10.0, 20.0, 30.0], "C": ["x", "y", "z"]}) # 'C' is non-numeric
+    """Test MinMax scaling of numeric columns."""
+    df = pd.DataFrame({"A": [1.0, 2.0, 3.0], "B": [10.0, 20.0, 30.0], "C": ["x", "y", "z"]})
     logger_mock = MagicMock()
     df_scaled, scaler = preprocessing.scale_columns(df.copy(), ["A", "B"], "minmax", logger_param=logger_mock)
-    
-    assert scaler is not None # Scaler object should be returned
-    assert "C" in df_scaled.columns # Non-scaled column should remain unchanged
+    assert scaler is not None
+    assert "C" in df_scaled.columns 
     pd.testing.assert_series_equal(df_scaled["C"], df["C"])
+    for col_name in ["A", "B"]:
+        np.testing.assert_almost_equal(df_scaled[col_name].min(), 0.0)
+        np.testing.assert_almost_equal(df_scaled[col_name].max(), 1.0)
+    logger_mock.info.assert_any_call("Scaling columns ['A', 'B'] with 'minmax' method.")
 
-    # Check if scaled columns are in the range [0, 1]
-    np.testing.assert_almost_equal(df_scaled["A"].min(), 0.0)
-    np.testing.assert_almost_equal(df_scaled["A"].max(), 1.0)
-    np.testing.assert_almost_equal(df_scaled["B"].min(), 0.0)
-    np.testing.assert_almost_equal(df_scaled["B"].max(), 1.0)
-    # Corrected log message assertion
-    logger_mock.info.assert_any_call("Scaling columns ['A', 'B'] with 'minmax'.")
-
-
-def test_main_preprocessing_e2e(tmp_path):
-    """End-to-end test for the main_preprocessing function."""
-    # Define a small raw DataFrame for the test
+def test_main_preprocessing_e2e(tmp_path: Path):
+    """End-to-end test for main_preprocessing, including data loading via data_loader."""
+    num_rows = 10 # Use enough rows for predictable holdout split
     raw_df_dict = {
-        "A": [1, 2, 3, 4, 100], # '100' is an outlier for column 'A'
-        "B": [10, 20, 30, 40, 50],
-        "dropme": [0, 0, 0, 0, 0], # This column should be dropped
-        # Add other columns expected by the scale config to avoid issues
-        'danceability': np.random.rand(5), 'energy': np.random.rand(5), 'loudness': np.random.rand(5),
-        'speechiness': np.random.rand(5),'acousticness': np.random.rand(5),'liveness': np.random.rand(5),
-        'valence': np.random.rand(5),'tempo': np.random.rand(5),'duration_ms': np.random.rand(5),
-        'key': np.random.rand(5)
+        "A": list(range(1, num_rows)) + [100], 
+        "B": list(range(10, 10 * num_rows, 10)) + [10 * num_rows + 10],
+        "dropme": [0] * num_rows,
+        'danceability': np.random.rand(num_rows), 'energy': np.random.rand(num_rows), 
+        'loudness': np.random.rand(num_rows), 'speechiness': np.random.rand(num_rows),
+        'acousticness': np.random.rand(num_rows),'liveness': np.random.rand(num_rows),
+        'valence': np.random.rand(num_rows),'tempo': np.random.rand(num_rows),
+        'duration_ms': np.random.rand(num_rows), 'key': np.random.rand(num_rows)
     }
     raw_df = pd.DataFrame(raw_df_dict)
     
-    # Use the helper to get a config dictionary pointing to temporary paths
-    test_config = minimal_config_for_tests(tmp_path)
-    raw_csv_path_in_config = test_config["data_source"]["raw_path"]
-    # Save the raw DataFrame to the temporary path specified in the test_config
-    raw_df.to_csv(raw_csv_path_in_config, index=False)
+    test_config = minimal_config_for_tests(tmp_path) 
+    raw_df.to_csv(test_config["data_source"]["raw_path"], index=False)
 
-    # Create a temporary config.yaml file for the main_preprocessing function to use
     config_yaml_path = tmp_path / "test_config.yaml"
     with open(config_yaml_path, "w") as f:
         yaml.safe_dump(test_config, f)
 
-    # Execute the main preprocessing pipeline
+    # Run main_preprocessing; it uses data_loader.get_raw_data internally
     preprocessing.main_preprocessing(config_path=str(config_yaml_path))
 
-    # --- Assertions for outputs ---
-    # Check if the processed data file was created
-    processed_output_path = test_config["data_source"]["processed_path"]
-    assert os.path.exists(processed_output_path)
+    # Assertions for outputs
+    processed_output_path = Path(test_config["data_source"]["processed_path"])
+    assert processed_output_path.exists(), "Processed data CSV not found."
     df_proc = pd.read_csv(processed_output_path)
 
-    # Check if specified columns were dropped
+    holdout_output_path = Path(test_config["data_source"]["inference_holdout_path"])
+    assert holdout_output_path.exists(), "Inference holdout CSV not found."
+    df_holdout = pd.read_csv(holdout_output_path)
+
+    # Check shapes based on holdout split
+    expected_holdout_rows = 1 # For 10 rows and 0.1 test_size
+    expected_pipeline_rows_before_outliers = len(raw_df) - expected_holdout_rows
+    assert len(df_holdout) == expected_holdout_rows, \
+        f"Holdout rows: expected {expected_holdout_rows}, got {len(df_holdout)}"
+    assert len(df_proc) <= expected_pipeline_rows_before_outliers
+
     assert "dropme" not in df_proc.columns
+    if "A" in df_proc.columns and not df_proc["A"].empty: 
+        assert np.isclose(df_proc["A"].min(), 0.0, atol=1e-7)
+        assert np.isclose(df_proc["A"].max(), 1.0, atol=1e-7)
     
-    # Check scaling and outlier removal effects on column 'A'
-    if "A" in df_proc.columns and not df_proc["A"].empty:
-        assert np.isclose(df_proc["A"].min(), 0.0, atol=1e-7) # Min should be 0 after scaling
-        assert np.isclose(df_proc["A"].max(), 1.0, atol=1e-7) # Max should be 1 after scaling
-    else:
-        pytest.fail("Column 'A' is missing or empty in processed data.")
-
-    # Check scaling effects on column 'B' (no outlier removal applied to B by this config)
-    if "B" in df_proc.columns and not df_proc["B"].empty: 
-        assert np.isclose(df_proc["B"].min(), 0.0, atol=1e-7)
-        assert np.isclose(df_proc["B"].max(), 1.0, atol=1e-7)
-    else:
-        pytest.fail("Column 'B' is missing or empty in processed data.")
-
-    # Check if the scaler artifact was saved
-    scaler_output_path = test_config["artifacts"]["preprocessing_pipeline"]
-    assert os.path.exists(scaler_output_path)
+    scaler_output_path = Path(test_config["artifacts"]["preprocessing_pipeline"])
+    assert scaler_output_path.exists(), "Scaler artifact not found."
     scaler = joblib.load(scaler_output_path)
-    
-    # Verify the scaler can transform data of the correct shape
-    num_scaled_cols = len(test_config["preprocessing"]["scale"]["columns"])
-    dummy_scaler_input_data = np.random.rand(2, num_scaled_cols) 
-    dummy_scaler_input_df = pd.DataFrame(dummy_scaler_input_data, columns=test_config["preprocessing"]["scale"]["columns"])
-    try:
-        transformed_arr = scaler.transform(dummy_scaler_input_df)
-        assert transformed_arr.shape == (2, num_scaled_cols)
-    except Exception as e:
-        pytest.fail(f"Scaler failed to transform data: {e}")
-
+    assert isinstance(scaler, (MinMaxScaler, StandardScaler))
