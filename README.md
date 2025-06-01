@@ -49,11 +49,13 @@ python -m src.main --config config.yaml
 You can also run specific stages: `--stage data` (data processing only), `--stage train` (model training only). The pipeline automatically executes data loading, validation, preprocessing, feature engineering, model training, and evaluation in sequence.
 
 ## Testing
-A comprehensive test suite using pytest is included:
+### Running Tests
+
+It is recommended to use the following commands to run tests, as this avoids Python path issues that may occur with some project structures:
 
 ```bash
-pytest tests/ -v
-pytest tests/ --cov=src --cov-report=html
+python -m pytest tests/ -v
+python -m pytest tests/ --cov=src --cov-report=html
 ```
 
 Each module (data loader, preprocessing, feature engineering, model, evaluator, inferencer) has corresponding test files. Mock data is used to verify the pipeline, and code coverage reports can be generated.
