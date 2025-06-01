@@ -1,226 +1,400 @@
 """
-model.py
+model_draft.py
 
-Leakage-proof, end-to-end MLOps pipeline:
-- Splits raw data first
-- Fits preprocessing pipeline ONLY on train split, applies to valid/test
-- Trains model, evaluates, and saves model and preprocessing artifacts
+This module implements regression model training, evaluation, and artifact saving
+using pre-processed and feature-engineered data.
+It uses evaluator_regression.py for model evaluation.
 """
-
 import os
-import logging
 import json
+import logging
 import pickle
-from typing import Dict, Any
+from typing import List, Tuple, Dict, Any
+
+import numpy as np
 import pandas as pd
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import RandomForestClassifier
+import statsmodels.api as sm
+import yaml
+# MSE and R2 are calculated by the evaluator, but sklearn.model_selection is still used
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import (
-    accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, confusion_matrix
-)
-from src.preprocess.preprocessing import build_preprocessing_pipeline, get_output_feature_names, run_preprocessing_pipeline
-from src.evaluation.evaluator import evaluate_classification
 
+# Assuming evaluator_regression.py is in src/evaluation/
+# Adjust the import path if your evaluator_regression.py is located elsewhere.
+from src.evaluation.evaluator import evaluate_statsmodels_model 
 
+# Module-level logger - will be initialized by main_modeling
 logger = logging.getLogger(__name__)
 
-MODEL_REGISTRY = {
-    "decision_tree": DecisionTreeClassifier,
-    "logistic_regression": LogisticRegression,
-    "random_forest": RandomForestClassifier,
-}
+def get_logger(logging_config: Dict[str, Any]) -> logging.Logger:
+    """Sets up and returns a logger based on the provided configuration."""
+    log_file = logging_config.get("log_file", "logs/modeling.log") 
+    log_dir = os.path.dirname(log_file)
+    if log_dir and not os.path.exists(log_dir):
+        os.makedirs(log_dir, exist_ok=True)
 
-
-def train_model(X_train, y_train, model_type, params):
-    if model_type not in MODEL_REGISTRY:
-        raise ValueError(f"Unsupported model type: {model_type}")
-    model_cls = MODEL_REGISTRY[model_type]
-    model = model_cls(**params)
-    model.fit(X_train, y_train)
-    logger.info(f"Trained model: {model_type}")
-    return model
-
-
-def evaluate_model(model, X, y, metrics):
-    y_pred = model.predict(X)
-    y_prob = model.predict_proba(X)[:, 1] if hasattr(
-        model, "predict_proba") else None
-    tn, fp, fn, tp = confusion_matrix(y, y_pred).ravel()
-    results = {}
-    for metric in metrics:
-        metric_lower = metric.lower()
-        if metric_lower == "accuracy":
-            results["Accuracy"] = accuracy_score(y, y_pred)
-        elif metric_lower in ["precision", "precision (ppv)", "positive predictive value (ppv)"]:
-            results["Precision (PPV)"] = precision_score(
-                y, y_pred, zero_division=0)
-        elif metric_lower in ["recall", "sensitivity"]:
-            results["Recall (Sensitivity)"] = recall_score(
-                y, y_pred, zero_division=0)
-        elif metric_lower == "specificity":
-            results["Specificity"] = tn / (tn + fp) if (tn + fp) > 0 else 0.0
-        elif metric_lower == "f1 score":
-            results["F1 Score"] = f1_score(y, y_pred, zero_division=0)
-        elif metric_lower == "negative predictive value (npv)":
-            results["Negative Predictive Value (NPV)"] = tn / \
-                (tn + fn) if (tn + fn) > 0 else 0.0
-        elif metric_lower == "roc auc":
-            results["ROC AUC"] = roc_auc_score(
-                y, y_prob) if y_prob is not None else float("nan")
-    return results
-
-
-def save_artifact(obj, path: str):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "wb") as f:
-        pickle.dump(obj, f)
-    logger.info(f"Artifact saved to {path}")
-
-
-def format_metrics(metrics: dict, ndigits: int = 2) -> dict:
-    return {k: round(float(v), ndigits) if isinstance(v, (float, int)) else v for k, v in metrics.items()}
-
-
-def run_model_pipeline(df: pd.DataFrame, config: Dict[str, Any]):
-    df = run_preprocessing_pipeline(df, config)
-    assert config["target"] in df.columns, f"{config['target']} column not found in DataFrame after preprocessing"
-
-    # 1. Split data using only raw features (present in the original file)
-    raw_features = config.get("raw_features", [])
-    target = config["target"]
-    split_cfg = config["data_split"]
-    input_features_raw = [f for f in raw_features if f != target]
-
-    X = df[input_features_raw]
-    y = df[target]
-    test_size = split_cfg.get("test_size", 0.2)
-    valid_size = split_cfg.get("valid_size", 0.2)
-    random_state = split_cfg.get("random_state", 42)
-
-    X_train, X_temp, y_train, y_temp = train_test_split(
-        X, y, test_size=(test_size + valid_size), random_state=random_state, stratify=y
+    log_format = logging_config.get(
+        "format", "%(asctime)s - %(levelname)s - %(name)s - %(module)s - %(message)s"
     )
-    rel_valid = valid_size / (test_size + valid_size)
-    X_valid, X_test, y_valid, y_test = train_test_split(
-        X_temp, y_temp, test_size=rel_valid, random_state=random_state, stratify=y_temp
-    )
-    # --- Save raw data splits ---
-    splits_dir = config.get("artifacts", {}).get("splits_dir", "data/splits")
-    os.makedirs(splits_dir, exist_ok=True)
-    X_train.assign(
-        **{target: y_train}).to_csv(os.path.join(splits_dir, "train.csv"), index=False)
-    X_valid.assign(
-        **{target: y_valid}).to_csv(os.path.join(splits_dir, "valid.csv"), index=False)
-    X_test.assign(**{target: y_test}
-                  ).to_csv(os.path.join(splits_dir, "test.csv"), index=False)
+    date_format = logging_config.get("datefmt", "%Y-%m-%d %H:%M:%S")
+    log_level_str = logging_config.get("level", "INFO").upper()
+    log_level = getattr(logging, log_level_str, logging.INFO)
 
-    # 2. Fit preprocessing pipeline on X_train, transform all splits
-    preprocessor = build_preprocessing_pipeline(config)
-    X_train_pp = preprocessor.fit_transform(X_train)
-    X_valid_pp = preprocessor.transform(X_valid)
-    X_test_pp = preprocessor.transform(X_test)
+    current_handlers = logging.getLogger().handlers
+    if not any(isinstance(h, logging.FileHandler) and h.baseFilename == os.path.abspath(log_file) for h in current_handlers) and \
+       not any(isinstance(h, logging.StreamHandler) for h in current_handlers):
+        
+        for handler in logging.getLogger().handlers[:]:
+            logging.getLogger().removeHandler(handler)
 
-    # 3. Create DataFrames with engineered feature columns
-    engineered_features = config.get("features", {}).get("engineered", [])
-    out_cols = get_output_feature_names(
-        preprocessor, input_features_raw, config)
-    X_train_pp = pd.DataFrame(X_train_pp, columns=out_cols)
-    X_valid_pp = pd.DataFrame(X_valid_pp, columns=out_cols)
-    X_test_pp = pd.DataFrame(X_test_pp, columns=out_cols)
+        logging.basicConfig(
+            level=log_level,
+            format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+            datefmt=date_format,
+        )
+        
+        file_handler = logging.FileHandler(log_file, mode='a')
+        file_handler.setFormatter(logging.Formatter(log_format, date_format))
+        file_handler.setLevel(log_level)
 
-    # 4. Use only engineered features for modeling
-    input_features = [
-        f for f in engineered_features if f in X_train_pp.columns]
-    X_train_pp = X_train_pp[input_features]
-    X_valid_pp = X_valid_pp[input_features]
-    X_test_pp = X_test_pp[input_features]
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(logging.Formatter(log_format, date_format))
+        console_handler.setLevel(log_level)
+        
+        logging.getLogger().addHandler(file_handler)
+        logging.getLogger().addHandler(console_handler)
+        logging.getLogger().setLevel(log_level)
 
-    # Save processed data splits
-    processed_dir = config.get("artifacts", {}).get(
-        "processed_dir", "data/processed")
-    os.makedirs(processed_dir, exist_ok=True)
-    X_train_pp.assign(**{target: y_train}).to_csv(
-        os.path.join(processed_dir, "train_processed.csv"), index=False)
-    X_valid_pp.assign(**{target: y_valid}).to_csv(
-        os.path.join(processed_dir, "valid_processed.csv"), index=False)
-    X_test_pp.assign(
-        **{target: y_test}).to_csv(os.path.join(processed_dir, "test_processed.csv"), index=False)
+    module_logger = logging.getLogger(__name__)
+    module_logger.setLevel(log_level) 
+    return module_logger
 
-    # Save preprocessing pipeline artifact
-    preproc_path = config.get("artifacts", {}).get(
-        "preprocessing_pipeline", "models/preprocessing_pipeline.pkl")
-    save_artifact(preprocessor, preproc_path)
-
-    # Train model
-    model_config = config["model"]
-    active = model_config.get("active", "decision_tree")
-    active_model_cfg = model_config[active]
-    model_type = active
-    params = active_model_cfg.get("params", {})
-    model = train_model(X_train_pp.values, y_train, model_type, params)
-
-    # Save model artifact
-    model_path = config.get("artifacts", {}).get(
-        "model_path", "models/model.pkl")
-    save_artifact(model, model_path)
-
-    active = model_config.get("active", "decision_tree")
-    algo_model_path = model_config.get(active, {}).get("save_path", f"models/{active}.pkl")
-    save_artifact(model, algo_model_path)
-
-    # Evaluate and log/save metrics using evaluation.py
-    artifacts_cfg = config.get("artifacts", {})
-    metrics_path = artifacts_cfg.get("metrics_path", "models/metrics.json")
-
-    results_valid = evaluate_classification(
-        model, X_valid_pp.values, y_valid, config, split="validation")
-    results_test = evaluate_classification(
-        model, X_test_pp.values, y_test,  config, split="test")
-
-    def round_metrics(metrics_dict, ndigits=2):
-        rounded = {}
-        for k, v in metrics_dict.items():
-            if isinstance(v, dict):  # For nested dicts (e.g., Confusion Matrix)
-                rounded[k] = {ik: (round(iv, ndigits) if isinstance(
-                    iv, float) else iv) for ik, iv in v.items()}
-            elif isinstance(v, float):
-                rounded[k] = round(v, ndigits)
-            else:
-                rounded[k] = v
-        return rounded
-
-    validation_rounded = round_metrics(results_valid)
-    test_rounded = round_metrics(results_test)
-
-    metrics_path = config.get("artifacts", {}).get(
-        "metrics_path", "models/metrics.json")
-
-    # Save both splits' metrics as one artifact
-    os.makedirs(os.path.dirname(metrics_path), exist_ok=True)
-    with open(metrics_path, "w") as f:
-        json.dump({
-            "validation": validation_rounded,
-            "test": test_rounded
-        }, f, indent=2)
-    logger.info(f"Metrics saved to {metrics_path}")
-
-
-# CLI for standalone training
-if __name__ == "__main__":
-    import sys
-    import yaml
-    import logging
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s - %(levelname)s - %(name)s - %(message)s")
-    config_path = sys.argv[1] if len(sys.argv) > 1 else "config.yaml"
-    with open(config_path, "r") as f:
+def load_config(path: str = "config.yaml") -> Dict[str, Any]:
+    """Loads YAML configuration file."""
+    temp_logger = logging.getLogger(f"{__name__}.load_config")
+    temp_logger.info(f"Loading configuration from: {path}")
+    with open(path, "r") as f:
         config = yaml.safe_load(f)
+    temp_logger.info("Configuration loaded successfully.")
+    return config
+
+def validate_modeling_config(config: Dict[str, Any]) -> None:
+    """Validates the presence of essential keys in the modeling configuration."""
+    logger.info("Validating modeling configuration.")
+    required_top_keys = ["artifacts", "data_split", "model", "logging", "target", "data_source"]
+    for key in required_top_keys:
+        if key not in config:
+            raise KeyError(f"Missing required top-level config key: '{key}'")
+
+    if "processed_dir" not in config["artifacts"]:
+         raise KeyError("Missing 'processed_dir' in 'artifacts' config for loading features.")
+    if config["artifacts"].get("engineered_features_filename") is None and not os.path.exists(os.path.join(config["artifacts"]["processed_dir"], "features.csv")):
+         logger.warning("Default 'features.csv' will be used, ensure 'engineered_features_filename' is set in artifacts if different.")
+    
+    if "processed_path" not in config["data_source"]:
+        raise KeyError("Missing 'processed_path' in 'data_source' config for loading target variable.")
+
+    active_model_type = config["model"].get("active")
+    if not active_model_type:
+        raise KeyError("Missing 'active' model type in 'model' config.")
+    if active_model_type not in config["model"] or "save_path" not in config["model"][active_model_type]:
+        raise KeyError(f"Missing 'save_path' for active model '{active_model_type}' in 'model' config.")
+    
+    if "metrics_path" not in config["artifacts"]:
+        raise KeyError("Missing 'metrics_path' in 'artifacts' config.")
+    logger.info("Modeling configuration validation successful.")
+
+
+def stepwise_selection(
+    X: pd.DataFrame,
+    y: pd.Series,
+    threshold_in: float = 0.05,
+    threshold_out: float = 0.1,
+    verbose: bool = True
+) -> List[str]:
+    """
+    Performs forward-backward stepwise selection using p-values.
+    Returns a list of selected feature names.
+    """
+    included: List[str] = []
+    logger.info(f"Starting stepwise selection: threshold_in={threshold_in}, threshold_out={threshold_out}")
+    
+    while True:
+        changed = False
+        excluded = list(set(X.columns) - set(included))
+        if not excluded: 
+            break
+
+        new_pval = pd.Series(index=excluded, dtype=float)
+        for new_column in excluded:
+            try:
+                model_data = X[included + [new_column]].astype(float)
+                aligned_y = y.loc[model_data.index] 
+                model = sm.OLS(aligned_y, sm.add_constant(model_data)).fit()
+                new_pval[new_column] = model.pvalues[new_column]
+            except Exception as e:
+                logger.warning(f"Could not calculate p-value for {new_column}: {e}")
+                new_pval[new_column] = float('inf') 
+
+        if not new_pval.empty and new_pval.min() < threshold_in:
+            best_feature = new_pval.idxmin()
+            included.append(best_feature)
+            changed = True
+            if verbose:
+                logger.info(f"Stepwise Add: Feature '{best_feature}', p-value {new_pval.min():.4f}")
+
+        if not included: 
+            if not changed: break 
+            else: continue 
+
+        try:
+            model_data_bwd = X[included].astype(float)
+            aligned_y_bwd = y.loc[model_data_bwd.index]
+            model = sm.OLS(aligned_y_bwd, sm.add_constant(model_data_bwd)).fit()
+            pvalues = model.pvalues.iloc[1:] 
+            if not pvalues.empty and pvalues.max() > threshold_out:
+                worst_feature = pvalues.idxmax()
+                included.remove(worst_feature)
+                changed = True
+                if verbose:
+                    logger.info(f"Stepwise Drop: Feature '{worst_feature}', p-value {pvalues.max():.4f}")
+        except Exception as e:
+            logger.warning(f"Error during backward step with features {included}: {e}")
+            
+        if not changed:
+            break
+            
+    if not included:
+        logger.warning("Stepwise selection resulted in no features. This may indicate issues with data or thresholds.")
+    else:
+        logger.info(f"Stepwise selection completed. Selected features ({len(included)}): {included}")
+    return included
+
+def train_linear_regression(
+    X_train: pd.DataFrame,
+    y_train: pd.Series,
+    model_config: Dict[str, Any] 
+) -> Tuple[sm.regression.linear_model.RegressionResultsWrapper, List[str]]:
+    """Trains a linear regression model, possibly with stepwise selection."""
+    step_cfg = model_config.get("stepwise", {})
+    use_stepwise = step_cfg.get("enabled", True) 
+
+    selected_features: List[str] = []
+
+    if use_stepwise:
+        logger.info("Performing stepwise feature selection for linear regression.")
+        selected_features = stepwise_selection(
+            X_train,
+            y_train,
+            threshold_in=step_cfg.get("threshold_in", 0.05),
+            threshold_out=step_cfg.get("threshold_out", 0.1),
+            verbose=step_cfg.get("verbose", True)
+        )
+        if not selected_features:
+            logger.warning("Stepwise selection resulted in no features. Fitting on all available features as a fallback.")
+            selected_features = list(X_train.columns) 
+            if not selected_features: 
+                 raise ValueError("No features available for training after stepwise selection and fallback.")
+    else:
+        logger.info("Skipping stepwise selection. Using all provided features for linear regression.")
+        selected_features = list(X_train.columns)
+        if not selected_features:
+             raise ValueError("No features available for training (stepwise selection disabled).")
+    
+    X_train_selected = X_train[selected_features].astype(float)
+    y_train_aligned = y_train.loc[X_train_selected.index]
+
+    X_train_const = sm.add_constant(X_train_selected)
+    model = sm.OLS(y_train_aligned, X_train_const).fit()
+    
+    logger.info(f"Linear regression fitted using {len(selected_features)} features.")
+    logger.debug(f"Model summary:\n{model.summary()}")
+    return model, selected_features
+
+# Removed the old evaluate_regression function. It's now in evaluator_regression.py
+
+def save_model_artifacts(
+    model: Any,
+    selected_features: List[str],
+    metrics: Dict[str, float], # These are raw metrics from the evaluator
+    config: Dict[str, Any]
+) -> None:
+    """Saves the trained model, selected features, and evaluation metrics based on config."""
+    model_cfg = config["model"]
+    art_cfg = config["artifacts"]
+    active_model_type = model_cfg["active"] 
+    
+    model_save_path = model_cfg[active_model_type]["save_path"]
+    model_dir = os.path.dirname(model_save_path)
+    if model_dir and not os.path.exists(model_dir):
+        os.makedirs(model_dir, exist_ok=True)
+    with open(model_save_path, "wb") as f:
+        pickle.dump(model, f)
+    logger.info(f"Trained model '{active_model_type}' saved to: {model_save_path}")
+
+    selected_features_path_key = model_cfg[active_model_type].get("selected_features_path")
+    if selected_features_path_key:
+         features_path = selected_features_path_key
+    else: 
+        base, ext = os.path.splitext(model_save_path)
+        features_path = f"{base}_selected_features.json"
+        logger.info(f"No explicit 'selected_features_path' in config for '{active_model_type}'. Saving to derived path: {features_path}")
+
+    features_dir = os.path.dirname(features_path)
+    if features_dir and not os.path.exists(features_dir):
+        os.makedirs(features_dir, exist_ok=True)
+    with open(features_path, "w") as f:
+        json.dump({"selected_features": selected_features, "count": len(selected_features)}, f, indent=4)
+    logger.info(f"Selected features list saved to: {features_path}")
+
+    metrics_save_path = art_cfg["metrics_path"]
+    metrics_dir = os.path.dirname(metrics_save_path)
+    if metrics_dir and not os.path.exists(metrics_dir):
+        os.makedirs(metrics_dir, exist_ok=True)
+        
+    # Round metrics before saving for consistent JSON output
+    # (or save raw metrics if preferred, evaluator already logs rounded ones)
+    # from src.evaluation.evaluator_regression import round_metrics_dict # Import if needed here
+    # rounded_metrics_to_save = round_metrics_dict(metrics) 
+    # For now, saving the raw metrics dict returned by the evaluator
+    with open(metrics_save_path, "w") as f:
+        json.dump(metrics, f, indent=4) 
+    logger.info(f"Evaluation metrics saved to: {metrics_save_path}")
+
+
+def main_modeling(config_path: str = "config.yaml") -> None:
+    """Main function to run the modeling pipeline."""
     try:
-        from src.data_load.data_loader import get_data
-        df = get_data(config_path=config_path, data_stage="raw")
-    except ImportError:
-        data_path = config["data_source"]["raw_path"]
-        df = pd.read_csv(data_path)
-    run_model_pipeline(df, config)
+        config = load_config(config_path)
+    except FileNotFoundError:
+        logging.critical(f"CRITICAL: Configuration file '{config_path}' not found. Modeling cannot start.")
+        return
+    except yaml.YAMLError as e:
+        logging.critical(f"CRITICAL: Error parsing YAML in '{config_path}': {e}. Modeling cannot start.")
+        return
+
+    global logger 
+    logger = get_logger(config.get("logging", {}))
+    
+    try:
+        validate_modeling_config(config)
+    except KeyError as e:
+        logger.critical(f"Configuration validation failed: {e}. Exiting.")
+        return
+
+    art_cfg = config["artifacts"]
+    model_section_cfg = config["model"] 
+    split_cfg = config["data_split"]
+    target_column_name = config["target"]
+    data_source_cfg = config["data_source"]
+
+    features_file_name = art_cfg.get("engineered_features_filename", "features.csv")
+    features_input_path = os.path.join(art_cfg["processed_dir"], features_file_name)
+    logger.info(f"Loading features (X) from: {features_input_path}")
+    try:
+        X_df = pd.read_csv(features_input_path)
+    except FileNotFoundError:
+        logger.critical(f"Features file not found at '{features_input_path}'. Exiting.")
+        return
+    except Exception as e:
+        logger.critical(f"Error loading features from '{features_input_path}': {e}. Exiting.")
+        return
+    logger.info(f"Features (X) loaded. Shape: {X_df.shape}")
+
+    target_data_path = data_source_cfg["processed_path"]
+    logger.info(f"Loading data for target variable '{target_column_name}' from: {target_data_path}")
+    try:
+        target_df = pd.read_csv(target_data_path)
+    except FileNotFoundError:
+        logger.critical(f"Target data file not found at '{target_data_path}'. Exiting.")
+        return
+    except Exception as e:
+        logger.critical(f"Error loading target data from '{target_data_path}': {e}. Exiting.")
+        return
+
+    if target_column_name not in target_df.columns:
+        logger.critical(f"Target column '{target_column_name}' not found in '{target_data_path}'. Exiting.")
+        return
+    y_series = target_df[target_column_name]
+    logger.info(f"Target variable (y) '{target_column_name}' loaded. Length: {len(y_series)}")
+
+    if not X_df.index.equals(target_df.index):
+        logger.warning("Indices of X (from features.csv) and target_df (from preprocessed.csv) do not match.")
+        min_len = min(len(X_df), len(y_series))
+        if len(X_df) != len(y_series):
+             logger.warning(f"X_df length ({len(X_df)}) and y_series length ({len(y_series)}) differ. Truncating to min_len: {min_len}")
+        X_df = X_df.iloc[:min_len].reset_index(drop=True) # Reset index after slicing
+        y_series = y_series.iloc[:min_len].reset_index(drop=True) # Reset index after slicing
+        logger.info("Applied basic alignment by slicing to minimum length and resetting index. Ensure data order is consistent.")
+
+
+    logger.info(f"Final X shape: {X_df.shape}, Final y length: {len(y_series)}")
+    if X_df.empty or y_series.empty:
+        logger.critical("X or y is empty after loading and alignment attempts. Exiting.")
+        return
+
+    logger.info(f"Splitting data: test_size={split_cfg['test_size']}, random_state={split_cfg['random_state']}")
+    try:
+        X_train, X_test, y_train, y_test = train_test_split(
+            X_df, y_series,
+            test_size=split_cfg.get("test_size", 0.2),
+            random_state=split_cfg.get("random_state", 42)
+        )
+    except ValueError as e:
+        logger.critical(f"Error during train_test_split: {e}. Check data shapes and consistency. X: {X_df.shape}, y: {y_series.shape}")
+        return
+        
+    logger.info(f"Data split complete: X_train: {X_train.shape}, X_test: {X_test.shape}, y_train: {y_train.shape}, y_test: {y_test.shape}")
+
+    active_model_type = model_section_cfg["active"]
+    model_params_config = model_section_cfg.get(active_model_type, {})
+
+    trained_model = None
+    final_selected_features: List[str] = []
+
+    if active_model_type == "linear_regression":
+        try:
+            trained_model, final_selected_features = train_linear_regression(X_train, y_train, model_params_config)
+        except Exception as e:
+            logger.critical(f"Error during linear regression training: {e}")
+            return
+    else:
+        logger.error(f"Model type '{active_model_type}' is not implemented in this script.")
+        return 
+
+    if trained_model is None or not final_selected_features:
+        logger.critical("Model training failed or no features were selected. Exiting.")
+        return
+
+    # --- Evaluate Model using the new evaluator ---
+    logger.info(f"Evaluating '{active_model_type}' model on test set...")
+    # The evaluate_statsmodels_model function already logs rounded metrics.
+    # It returns the raw (unrounded) metrics.
+    evaluation_metrics = evaluate_statsmodels_model(
+        model=trained_model,
+        X_eval=X_test,
+        y_eval=y_test,
+        selected_features=final_selected_features,
+        split_label="test" 
+    )
+    if not evaluation_metrics or all(pd.isna(v) for v in evaluation_metrics.values()):
+        logger.error("Evaluation returned no metrics or all NaN. Check evaluator logs.")
+        # Decide if to proceed with saving NaN metrics or exit
+    
+    logger.info("Saving model artifacts...")
+    save_model_artifacts(trained_model, final_selected_features, evaluation_metrics, config)
+    
+    logger.info(f"Modeling pipeline for '{active_model_type}' completed successfully.")
+    # Log final raw metrics that were saved
+    logger.info(f"Final saved metrics (raw): {evaluation_metrics}")
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(name)s - %(message)s")
+    
+    config_file_path = "config.yaml" 
+    
+    if not os.path.exists(config_file_path):
+        logging.critical(f"CRITICAL: Main - Configuration file '{config_file_path}' not found. Modeling cannot start.")
+    else:
+        main_modeling(config_path=config_file_path)
+

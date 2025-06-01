@@ -43,18 +43,18 @@ def parse_genres(df, config, logger):
     # Parse artist_genres and create top genre columns
     logger.info("Parsing and engineering genre features...")
     genres_map = {
-        'pop': r'(pop)',
-        'rock': r'(rock)',
-        'electronic': r'(house|edm|electro|progressive)',
-        'latin': r'(latin|puerto|reggaeton)',
-        'hip-hop': r'(hip|rap|urban)',
-        'indie': r'(indie)',
-        'jazz': r'(jazz)',
-        'r&b': r'(r&b)',
-        'soul': r'(soul)',
-        'metal': r'(metal|punk)',
-        'classic': r'(classic)',
-        'country': r'(country)'
+        'pop': r'(?:pop)',
+        'rock': r'(?:rock)',
+        'electronic': r'(?:house|edm|electro|progressive)',
+        'latin': r'(?:latin|puerto|reggaeton)',
+        'hip-hop': r'(?:hip|rap|urban)',
+        'indie': r'(?:indie)',
+        'jazz': r'(?:jazz)',
+        'r&b': r'(?:r&b)',
+        'soul': r'(?:soul)',
+        'metal': r'(?:metal|punk)',
+        'classic': r'(?:classic)',
+        'country': r'(?:country)'
     }
     for genre, pattern in genres_map.items():
         colname = f"genre_{genre}"
@@ -183,8 +183,7 @@ if __name__ == "__main__":
     # Run preprocessing first
     df = drop_columns(
         df,
-        config["preprocessing"].get("drop_columns", []),
-        logging.getLogger(__name__)
+        config["preprocessing"].get("drop_columns", [])
     )
     out_cfg = config["preprocessing"].get("outlier_removal", {})
     if out_cfg.get("enabled", False):

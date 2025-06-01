@@ -1,0 +1,25 @@
+{
+    "selected_features": [
+        "poly_audio_artist_popularity",
+        "poly_audio_energy duration_ms",
+        "poly_genre_genre_metal^2",
+        "genre_metal",
+        "poly_genre_genre_metal",
+        "poly_genre_genre_hip-hop genre_r&b",
+        "genre_indie",
+        "poly_genre_genre_indie",
+        "poly_genre_genre_indie^2",
+        "poly_audio_speechiness valence",
+        "poly_genre_genre_pop^2",
+        "poly_genre_genre_rock genre_classic",
+        "poly_genre_genre_pop",
+        "genre_pop",
+        "poly_audio_artist_popularity^2",
+        "poly_audio_danceability valence",
+        "acousticness",
+        "poly_audio_speechiness",
+        "poly_audio_speechiness artist_popularity",
+        "speechiness"
+    ],
+    "count": 20
+}
