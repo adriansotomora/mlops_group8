@@ -1,7 +1,7 @@
 year,track_name,track_popularity,album,artist_name,artist_genres,artist_popularity,danceability,energy,key,loudness,mode,speechiness,acousticness,instrumentalness,liveness,valence,tempo,duration_ms,prediction
-2019,Hold Me While You Wait,79,Divinely Uninspired To A Hellish Extent,Lewis Capaldi,['pop'; 'uk pop'],79,0.688,0.53,11.0,74.0,1.0,0.0333,0.443,0.0,0.0995,0.162,106.958,205687.0,76.05736416292872
-2009,Naturally,68,Kiss & Tell,Selena Gomez & The Scene,['pop'],67,0.605,0.902,10.0,73.0,0.0,0.0511,0.0185,1.01e-06,0.0534,0.875,132.612,202587.0,69.87413568794506
-2005,Pon de Replay,81,Music Of The Sun,Rihanna,['barbadian pop'; 'pop'; 'urban contemporary'],87,0.779,0.64,7.0,92.0,1.0,0.159,0.000155,0.00077,0.101,0.498,99.019,246960.0,76.18566616858853
-2019,lovely (with Khalid),90,lovely (with Khalid),Billie Eilish,['art pop'; 'electropop'; 'pop'],88,0.351,0.296,4.0,100.0,0.0,0.0333,0.934,0.0,0.095,0.12,115.284,200186.0,81.22720715162836
-2004,"Sunshine (feat, Lea)",66,U Gotta Feel Me,Lil' Flip,['crunk'; 'dirty south rap'],52,0.814,0.387,0.0,99.0,1.0,0.0946,0.0248,0.0,0.131,0.792,93.961,225173.0,66.2674585899492
-2015,"All Eyes on You (feat, Chris Brown & Nicki Minaj)",71,Dreams Worth More Than Money,Meek Mill,['hip hop'; 'philly rap'; 'pop rap'; 'rap'; 'southern hip hop'; 'trap'],72,0.589,0.658,11.0,72.0,0.0,0.203,0.0242,0.0,0.118,0.251,77.521,223973.0,72.36623078637805
+2019,Hold Me While You Wait,79,Divinely Uninspired To A Hellish Extent,Lewis Capaldi,['pop'; 'uk pop'],79,0.688,0.53,11.0,74.0,1.0,0.0333,0.443,0.0,0.0995,0.162,106.958,205687.0,76.0573641629288
+2009,Naturally,68,Kiss & Tell,Selena Gomez & The Scene,['pop'],67,0.605,0.902,10.0,73.0,0.0,0.0511,0.0185,1.01e-06,0.0534,0.875,132.612,202587.0,69.8741356879452
+2005,Pon de Replay,81,Music Of The Sun,Rihanna,['barbadian pop'; 'pop'; 'urban contemporary'],87,0.779,0.64,7.0,92.0,1.0,0.159,0.000155,0.00077,0.101,0.498,99.019,246960.0,76.1856661685886
+2019,lovely (with Khalid),90,lovely (with Khalid),Billie Eilish,['art pop'; 'electropop'; 'pop'],88,0.351,0.296,4.0,100.0,0.0,0.0333,0.934,0.0,0.095,0.12,115.284,200186.0,81.22720715162842
+2004,"Sunshine (feat, Lea)",66,U Gotta Feel Me,Lil' Flip,['crunk'; 'dirty south rap'],52,0.814,0.387,0.0,99.0,1.0,0.0946,0.0248,0.0,0.131,0.792,93.961,225173.0,66.26745858994937
+2015,"All Eyes on You (feat, Chris Brown & Nicki Minaj)",71,Dreams Worth More Than Money,Meek Mill,['hip hop'; 'philly rap'; 'pop rap'; 'rap'; 'southern hip hop'; 'trap'],72,0.589,0.658,11.0,72.0,0.0,0.203,0.0242,0.0,0.118,0.251,77.521,223973.0,72.36623078637817

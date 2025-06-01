@@ -1,70 +1,74 @@
 # This file is used to set up the parameters for data loading, logging, and other settings.
 
 data_source:
-  raw_path: "data/raw/Songs_2025.csv" # Path to the raw data file
-  processed_path: "./data/processed/Songs_2025_processed.csv" # Path for saving/loading the main preprocessed dataset
-  type: "csv"                      # Data file type
-  delimiter: ","                   # CSV delimiter
-  header: 0                        # Header row index
-  encoding: "utf-8"                # File encoding
+  raw_path: "data/raw/Songs_2025.csv" # Path to the original raw data file
+  processed_path: "./data/processed/Songs_2025_processed.csv" # Path for saving/loading the main preprocessed dataset (after holdout split)
+  type: "csv"                      # Data file type for raw_path
+  delimiter: ","                   # CSV delimiter for raw_path
+  header: 0                        # Header row index for raw_path
+  encoding: "utf-8"                # File encoding for raw_path
+  
+  # --- Parameters for splitting off a raw holdout set for inference ---
+  inference_holdout_path: "data/raw_holdout/inference_holdout_data.csv" # Path to save the untouched inference holdout set
+  inference_holdout_size: 0.1 # Proportion of raw data to set aside (e.g., 0.1 for 10%). Set to 0 or remove key to disable.
 
 logging:
-  level: "INFO"                         # Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-  log_file: "./logs/main.log"           # Path to the log file
-  format: "%(asctime)s - %(levelname)s - %(name)s - %(message)s"  # Log message format
+  level: "INFO"                         # Logging level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  log_file: "./logs/pipeline_main.log"  # Main log file for the pipeline runs
+  format: "%(asctime)s - %(levelname)s - %(name)s - %(module)s - %(message)s" # Detailed log format
   datefmt: "%Y-%m-%d %H:%M:%S"          # Timestamp format for logs
 
-data_split:
-  test_size: 0.2
-  valid_size: 0.2 # Note: valid_size is defined but not used by the current train_test_split in model_draft.py
-  random_state: 42
+data_split: # Configuration for train/test split in model.py
+  test_size: 0.2 # Proportion of the (post-holdout) data to use for the test set
+  valid_size: 0.2 # Note: valid_size is defined but not actively used by current model.py's train_test_split
+  random_state: 42 # Ensures reproducibility of all splits (holdout, train/test)
 
 model:
   active: linear_regression  # Specifies which model configuration to use from below
 
-  logistic_regression: # Note: model_draft.py currently only implements linear_regression training
+  logistic_regression: 
     save_path: models/logistic_regression.pkl
-    # Suggested addition: selected_features_path: models/logistic_regression_selected_features.json
-    params: {} # Parameters for Logistic Regression
+    selected_features_path: models/logistic_regression_selected_features.json # Path to save selected features for this model
+    params: {} 
 
-  knn: # Note: model_draft.py currently only implements linear_regression training. KNN for regression would need specific implementation.
+  knn: 
     save_path: models/knn.pkl
-    # Suggested addition: selected_features_path: models/knn_selected_features.json
-    params: {} # Parameters for KNN
+    selected_features_path: models/knn_selected_features.json
+    params: {}
 
-  kmeans: # Note: KMeans is a clustering algorithm. The current model_draft.py focuses on regression.
+  kmeans: 
     save_path: models/kmeans.pkl
+    # No selected_features_path needed for unsupervised KMeans
     k_min: 1
     k_max: 10
     n_clusters: 3
     random_state: 42
 
   linear_regression:
-    save_path: models/linear_regression.pkl # Path to save the trained linear regression model
-    selected_features_path: models/linear_regression_selected_features.json
+    save_path: models/linear_regression.pkl 
+    selected_features_path: models/linear_regression_selected_features.json # Explicit path for clarity
     stepwise:
-      threshold_in: 0.05
-      threshold_out: 0.1
-      # Suggested addition: enabled: true  # For explicit control over running stepwise selection
-      # Suggested addition: verbose: true  # For detailed logging from stepwise selection
+      enabled: true # Explicitly enable/disable stepwise selection
+      threshold_in: 0.05 # p-value to enter
+      threshold_out: 0.1  # p-value to remove
+      verbose: true # Log stepwise selection details
 
-features: # Note: This section is comprehensive, intended for a full feature engineering process.
-          # The current preprocessing.py primarily uses the 'preprocessing' section below for specific tasks.
-  exclude: # Columns to exclude early in feature processing
-    - year
-  profiling_variables: # Variables for data profiling
-    - track_popularity
-    - artist_popularity
+features: # Configuration for feature engineering steps in features.py
+  exclude: # Columns to exclude from final feature set (after all transformations)
+    - year 
+  profiling_variables: # Columns used for profiling, also excluded from final modeling features
+    - track_popularity # This is the target, should not be a feature
+    - artist_popularity 
     - energy
     - mode
-  drop: # General list of columns to drop during feature engineering
+  drop: # Columns to drop during the feature engineering stage (by features.py)
     - track_name
     - album
     - artist_name
-    - cluster
-    - artist_genres
-    - year
-  audio_features: # List of audio features for potential specific transformations
+    - cluster # If 'cluster' is a raw column to be dropped
+    - artist_genres # Original genre string, dropped after parsing
+    # - year # 'year' is already in 'exclude', can be removed from here if redundant logic
+  audio_features: # List of numeric audio features used for polynomial feature creation
     - danceability
     - energy
     - liveness
@@ -74,7 +78,7 @@ features: # Note: This section is comprehensive, intended for a full feature eng
     - valence
     - duration_ms
     - artist_popularity
-  genre_features: # List of genre-related features (likely after encoding)
+  genre_features: # Base names for genre dummy variables used for polynomial creation (e.g., 'pop' -> 'genre_pop')
     - pop
     - rock
     - electronic
@@ -91,40 +95,51 @@ features: # Note: This section is comprehensive, intended for a full feature eng
     audio:
       degree: 2
       include_bias: false
+      interaction_only: false # Set to true for only interaction terms
     genre:
       degree: 2
       include_bias: false
+      interaction_only: false
 
 target: track_popularity # Name of the target variable for model training
 
-metrics: # Note: This list specifies desired metrics.
-         # The model_draft.py's evaluate_regression currently calculates mse, rmse, r2, adj_r2.
-         # All calculated metrics are saved to artifacts.metrics_path.
-  - mse
+metrics: # List of metrics to calculate (primarily for classification, regression metrics are hardcoded in evaluator)
+  # For regression, evaluator_regression.py calculates: mse, rmse, mae, r2, adj_r2, mape
+  # This section might be more relevant if you switch to a classification model
+  - mse 
   - r2
 
-preprocessing: # Configuration for the preprocessing.py script
-  drop_columns: # Columns to be dropped by preprocessing.py
+preprocessing: # Configuration for initial preprocessing steps in preprocessing.py
+  drop_columns: # Columns to be dropped by preprocessing.py (before feature engineering)
     - instrumentalness
   outlier_removal:
     enabled: true
     features: [duration_ms, track_popularity] # Features for IQR outlier removal
     iqr_multiplier: 1.5
   scale:
-    columns: [danceability, energy, loudness, speechiness, acousticness, liveness, valence, tempo, duration_ms, key] # Columns to scale
-    method: minmax # Scaling method (MinMaxScaler)
+    columns: [danceability, energy, loudness, speechiness, acousticness, liveness, valence, tempo, duration_ms, key] # Numeric columns to scale
+    method: minmax # Scaling method: "minmax" or "standard"
 
 artifacts:
-  metrics_path: models/metrics.json # Path to save the evaluation metrics of the active model
-  preprocessing_pipeline: models/preprocessing_pipeline.pkl # Path to save the fitted scaler from preprocessing
-  splits_dir: data/splits # Directory for saving data splits (e.g., train/test CSVs if done as a separate step)
-  processed_dir: data/processed # General directory for processed files (used by preprocessing.py as context for data_source.processed_path)
+  # Paths for outputs from model.py
+  metrics_path: models/metrics.json 
+  # Path for scaler from preprocessing.py
+  preprocessing_pipeline: models/preprocessing_pipeline.pkl 
+  
+  # Directory for saving data splits (e.g., train/test CSVs if model.py saves them)
+  splits_dir: data/splits # Currently not used by the regression model.py for saving splits
+  
+  # Base directory for processed data files (e.g., features.csv)
+  processed_dir: data/processed 
+  # Specific filenames for outputs of features.py, used by model.py and inferencer.py
+  engineered_features_filename: "features.csv" 
+  feature_list_filename: "feature_list.txt" # Output by features.py
 
-data_validation: # Configuration for data validation (e.g., by a data_validator.py script)
+data_validation: # Configuration for data validation (if a data_validator.py script is used)
   enabled: true
   action_on_error: "raise"  # Options: "raise" or "warn" on validation failure
-  report_path: "logs/validation_report.json" # Path to save the validation report
-  schema: # Expected schema for the raw data
+  report_path: "logs/validation_report.json" 
+  schema: # Expected schema for the raw data (raw_path)
     columns:
       - name: "year"
         dtype: "int"
@@ -134,7 +149,7 @@ data_validation: # Configuration for data validation (e.g., by a data_validator.
       - name: "track_name"
         dtype: "str"
         required: true
-      - name: "track_popularity"
+      - name: "track_popularity" # Target variable
         dtype: "int"
         required: true
         min: 0
@@ -145,71 +160,71 @@ data_validation: # Configuration for data validation (e.g., by a data_validator.
       - name: "artist_name"
         dtype: "str"
         required: true
-      - name: "artist_genres" # Note: Consider if this should be list/array type after splitting if it's a multi-genre string.
-        dtype: "str"          # For now, 'str' is fine for initial load.
+      - name: "artist_genres" 
+        dtype: "str"      
         required: true
       - name: "artist_popularity"
         dtype: "int"
         required: true
         min: 0
         max: 100
+      - name: "danceability"
+        dtype: "float"
+        required: true # Assuming required for scaling
+        min: 0.0 
+        max: 1.0
       - name: "energy"
         dtype: "float"
-        required: false # Note: Schema says false, but preprocessing.scale.columns includes it. Ensure consistency or handle missing values before scaling.
-        min: 0.0519
-        max: 0.999
+        required: true # Assuming required for scaling
+        min: 0.0 
+        max: 1.0
       - name: "key"
-        dtype: "float" # Note: 'key' is often categorical (0-11). If treated as float for scaling, this is okay.
+        dtype: "float" # Often int (0-11), but float if scaled
         required: true
         min: 0.0
         max: 11.0
       - name: "loudness"
         dtype: "float"
         required: true
-        min: -56.0 # Note: min value seems quite low, check data distribution.
-        max: 132.0 # Note: max value seems quite high for typical dBFS, check data.
-      - name: "mode" # Note: Mode is binary (0 or 1).
-        dtype: "float" # Treating as float is fine, but it's essentially categorical.
+        min: -60.0 # Adjusted typical min
+        max: 5.0   # Adjusted typical max for dBFS
+      - name: "mode" # Binary (0 or 1)
+        dtype: "float" 
         required: true
         min: 0.0
         max: 1.0
       - name: "speechiness"
         dtype: "float"
         required: true
-        min: 0.0225
-        max: 0.576
+        min: 0.0
+        max: 1.0
       - name: "acousticness"
         dtype: "float"
         required: true
-        min: 0.0000129
-        max: 0.978
-      - name: "instrumentalness" # Note: This is in schema but also in preprocessing.drop_columns. It will be dropped.
-        dtype: "float"
-        required: true
         min: 0.0
-        max: 0.985
+        max: 1.0
+      - name: "instrumentalness" # Will be dropped by preprocessing.drop_columns
+        dtype: "float"
+        required: true # Or false if sometimes missing before drop
+        min: 0.0
+        max: 1.0
       - name: "liveness"
         dtype: "float"
         required: true
-        min: 0.021
-        max: 0.843
+        min: 0.0
+        max: 1.0
       - name: "valence"
         dtype: "float"
         required: true
-        min: 0.0377
-        max: 0.974
+        min: 0.0
+        max: 1.0
       - name: "tempo"
         dtype: "float"
         required: true
-        min: 60.019
-        max: 210.857
+        min: 0.0 # Tempo usually positive
+        # max: 250.0 # Example max
       - name: "duration_ms"
-        dtype: "float" # Note: Often treated as int, but float is fine.
+        dtype: "float" # Often int, but float is fine
         required: true
-        min: 97393.0
-        max: 688453.0
-      - name: "danceability"
-        dtype: "float"
-        required: true
-        min: 0.0 # min should be 0.0 for danceability as per typical Spotify API range
-        max: 1.0
+        min: 0.0 # Duration usually positive
+        # max: 3600000 # Example 1 hour

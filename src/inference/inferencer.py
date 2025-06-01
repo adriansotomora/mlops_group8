@@ -2,12 +2,16 @@
 inferencer.py
 
 Performs batch inference using a trained model and preprocessing/feature
-engineering pipeline.
+engineering pipeline. Includes prediction intervals for regression models.
 
 Usage:
 python -m src.inference.inferencer <input_csv_path> <config_path> <output_csv_path>
 Example:
 python -m src.inference.inferencer data/new_unseen_data.csv config.yaml data/predictions/output_predictions.csv
+
+Having already run the training pipeline:
+
+python -m src.inference.inferencer data/raw_holdout/inference_holdout_data.csv config.yaml data/predictions/holdout_predictions_with_intervals.csv
 """
 
 import argparse
@@ -21,11 +25,9 @@ import numpy as np
 import statsmodels.api as sm
 import yaml
 from typing import Dict, Any, List, Optional
-import joblib # <<<<------ ADD THIS IMPORT
+import joblib 
 
-# It's crucial that these import paths match your project structure.
-# Assuming preprocessing.py is at src/preprocess/preprocessing.py
-# and features.py is at src/features/features.py
+# Import paths (ensure these match your project structure)
 try:
     from src.preprocess.preprocessing import drop_columns as preprocess_drop_columns
     from src.features.features import (
@@ -34,7 +36,7 @@ try:
         drop_irrelevant_columns as features_drop_columns
     )
 except ModuleNotFoundError as e:
-    print(f"CRITICAL ERROR: Could not import necessary modules. Ensure your PYTHONPATH is set correctly or run from project root using -m. Missing: {e}")
+    print(f"CRITICAL ERROR: Could not import necessary modules. Ensure PYTHONPATH. Missing: {e}")
     sys.exit(1)
 
 logger = logging.getLogger(__name__)
@@ -59,8 +61,7 @@ def _setup_logging(log_level_str: str = "INFO", log_file: Optional[str] = None, 
     )
     logging.getLogger(__name__).setLevel(log_level)
 
-def _load_standard_pickle(path: str, label: str) -> Any: # Renamed for clarity
-    """Loads a standard pickled object (e.g., statsmodels model)."""
+def _load_standard_pickle(path: str, label: str) -> Any:
     if not os.path.exists(path):
         logger.error(f"{label} not found at path: {path}")
         raise FileNotFoundError(f"{label} not found at path: {path}")
@@ -69,12 +70,11 @@ def _load_standard_pickle(path: str, label: str) -> Any: # Renamed for clarity
     logger.info(f"Successfully loaded {label} (using pickle) from {path}")
     return artifact
 
-def _load_joblib_pickle(path: str, label: str) -> Any: # New function for joblib
-    """Loads a joblib-pickled object (e.g., scikit-learn scaler)."""
+def _load_joblib_pickle(path: str, label: str) -> Any:
     if not os.path.exists(path):
         logger.error(f"{label} not found at path: {path}")
         raise FileNotFoundError(f"{label} not found at path: {path}")
-    artifact = joblib.load(path) # Use joblib.load()
+    artifact = joblib.load(path)
     logger.info(f"Successfully loaded {label} (using joblib) from {path}")
     return artifact
 
@@ -92,10 +92,10 @@ def run_inference(input_csv_path: str, config_path: str, output_csv_path: str) -
         with open(config_path, "r") as f:
             config = yaml.safe_load(f)
     except FileNotFoundError:
-        print(f"CRITICAL ERROR: Configuration file '{config_path}' not found. Cannot proceed.")
+        print(f"CRITICAL ERROR: Config file '{config_path}' not found.")
         sys.exit(1)
     except yaml.YAMLError as e:
-        print(f"CRITICAL ERROR: Error parsing YAML in '{config_path}': {e}. Cannot proceed.")
+        print(f"CRITICAL ERROR: Error parsing YAML '{config_path}': {e}.")
         sys.exit(1)
 
     log_cfg = config.get("logging", {})
@@ -129,25 +129,20 @@ def run_inference(input_csv_path: str, config_path: str, output_csv_path: str) -
         return
 
     try:
-        # Use _load_joblib_pickle for the scaler
         scaler = _load_joblib_pickle(scaler_path, "Scaler")
-        # Use _load_standard_pickle for the statsmodels model
         model = _load_standard_pickle(model_save_path, "Trained Model")
-        
         selected_features_data = _load_json(selected_features_json_path, "Selected Features List")
         final_selected_features_list = selected_features_data.get("selected_features", [])
         if not final_selected_features_list:
-            logger.critical("Loaded selected features list is empty. Cannot proceed.")
+            logger.critical("Loaded selected features list is empty.")
             return
     except FileNotFoundError:
-        logger.critical("A required artifact was not found during loading. Check paths and previous pipeline steps.")
+        logger.critical("A required artifact was not found. Check paths.")
         return
     except Exception as e:
-        logger.critical(f"Error loading artifacts: {e}") # This is where your error was caught
+        logger.critical(f"Error loading artifacts: {e}") 
         return
 
-    # ... (rest of the run_inference function remains the same as in inferencer_py_fix_optional) ...
-    # 2. Load New Raw Data
     logger.info(f"Loading new input data from: {input_csv_path}")
     try:
         new_data_df = pd.read_csv(
@@ -167,25 +162,20 @@ def run_inference(input_csv_path: str, config_path: str, output_csv_path: str) -
 
     current_df = new_data_df.copy()
 
-    # 3. Apply Preprocessing transformations (matching training)
     logger.info("Applying initial preprocessing transformations...")
     pre_cfg = config.get("preprocessing", {})
-
     cols_to_drop_initial = pre_cfg.get("drop_columns", [])
     current_df = preprocess_drop_columns(current_df, cols_to_drop_initial, logger_param=logger)
 
     scale_cfg = pre_cfg.get("scale", {})
     columns_to_scale_from_config = scale_cfg.get("columns", [])
-    
-    actual_columns_to_scale = []
+    actual_columns_to_scale = [col for col in columns_to_scale_from_config if col in current_df.columns and pd.api.types.is_numeric_dtype(current_df[col])]
+    # Log warnings for columns in config not found or not numeric in current_df
     for col in columns_to_scale_from_config:
         if col not in current_df.columns:
-            logger.warning(f"Column '{col}' (for scaling) not found in input data. Skipping scaling for this column.")
-            continue
-        if not pd.api.types.is_numeric_dtype(current_df[col]): 
-            logger.warning(f"Column '{col}' (for scaling) is not numeric in input data (type: {current_df[col].dtype}). Skipping scaling for this column.")
-            continue
-        actual_columns_to_scale.append(col)
+            logger.warning(f"Scaling config: Column '{col}' not found in input data after initial drops.")
+        elif col not in actual_columns_to_scale: # Implies it was not numeric
+            logger.warning(f"Scaling config: Column '{col}' found but is not numeric (type: {current_df[col].dtype}). Will not be scaled.")
 
     if actual_columns_to_scale:
         logger.info(f"Applying scaler to columns: {actual_columns_to_scale}")
@@ -193,86 +183,92 @@ def run_inference(input_csv_path: str, config_path: str, output_csv_path: str) -
             current_df_to_scale = current_df[actual_columns_to_scale]
             if hasattr(scaler, 'feature_names_in_'):
                 scaler_expected_features = list(scaler.feature_names_in_)
+                # Ensure columns are in the order the scaler expects
                 current_df_to_scale = current_df_to_scale[scaler_expected_features]
-            
             transformed_data = scaler.transform(current_df_to_scale)
             current_df[actual_columns_to_scale] = transformed_data
-        except ValueError as e:
+        except Exception as e: # More specific error handling for ValueError was here before
             logger.error(f"Error applying scaler: {e}")
-            if hasattr(scaler, 'n_features_in_'):
-                 logger.error(f"Scaler expected {scaler.n_features_in_} features.")
-            if hasattr(scaler, 'feature_names_in_'):
-                 logger.error(f"Scaler was fit on features: {list(scaler.feature_names_in_)}")
-            return 
-        except Exception as e:
-            logger.error(f"Unexpected error applying scaler: {e}")
             return
     else:
-        logger.info("No valid columns found or specified for scaling in the input data based on config.")
+        logger.info("No valid columns for scaling based on config and input data.")
     
-    # 4. Apply Feature Engineering transformations (matching features.py)
     logger.info("Applying feature engineering transformations...")
     current_df = parse_genres(current_df, config, logger)
     current_df = features_drop_columns(current_df, config, logger) 
     current_df = create_polynomial_features(current_df, config, logger)
     logger.info(f"Shape after feature engineering: {current_df.shape}")
 
-    # 5. Select the exact features the model was trained on
     logger.info(f"Selecting final features for prediction: {final_selected_features_list}")
-    
     missing_model_features = [f for f in final_selected_features_list if f not in current_df.columns]
     if missing_model_features:
-        logger.critical(f"One or more features required by the model are missing from the transformed input data: {missing_model_features}")
+        logger.critical(f"Required model features missing from transformed data: {missing_model_features}")
         return
-
     X_inference = current_df[final_selected_features_list].astype(float) 
 
-    # 6. Add constant for statsmodels
     X_inference_const = sm.add_constant(X_inference, has_constant='add')
-    
     if hasattr(model, 'model') and hasattr(model.model, 'exog_names'):
         model_expected_cols = model.model.exog_names
         missing_from_inference = [col for col in model_expected_cols if col not in X_inference_const.columns]
         if missing_from_inference:
-            logger.critical(f"Columns expected by the model are missing from the inference data after adding constant: {missing_from_inference}")
+            logger.critical(f"Cols expected by model missing after adding const: {missing_from_inference}")
             return
         try:
-            X_inference_const = X_inference_const[model_expected_cols]
+            X_inference_const = X_inference_const[model_expected_cols] # Reorder
             logger.info("Reordered inference columns to match model's exog_names.")
         except KeyError as e:
-            logger.critical(f"KeyError during column reordering for statsmodels: {e}. "
-                           f"Model expected: {model_expected_cols}, Inference data has: {X_inference_const.columns.tolist()}")
+            logger.critical(f"KeyError reordering columns for statsmodels: {e}. Expected: {model_expected_cols}, Got: {X_inference_const.columns.tolist()}")
             return
     else:
-        logger.warning("Model does not have 'exog_names' attribute; cannot verify/reorder columns. Assuming current order is correct.")
+        logger.warning("Model lacks 'exog_names'; cannot verify/reorder columns. Assuming order is correct.")
 
     logger.info(f"Prepared data for prediction. Shape: {X_inference_const.shape}")
 
-    # 7. Make Predictions
-    logger.info("Generating predictions...")
+    # --- MODIFIED SECTION for Prediction and Prediction Intervals ---
+    logger.info("Generating predictions and 95% prediction intervals...")
     try:
-        predictions = model.predict(X_inference_const)
+        pred_results_obj = model.get_prediction(X_inference_const)
+        # alpha=0.05 for 95% prediction intervals
+        pred_summary_df = pred_results_obj.summary_frame(alpha=0.05) 
+        
+        # pred_summary_df contains 'mean' (prediction), 'obs_ci_lower', 'obs_ci_upper'
+        # It should have the same index as X_inference_const
     except Exception as e:
-        logger.critical(f"Error during model prediction: {e}")
-        # ... (error details logging) ...
+        logger.critical(f"Error during model prediction or interval generation: {e}")
+        if hasattr(model, 'model') and hasattr(model.model, 'exog_names'):
+             logger.critical(f"Model exog names: {model.model.exog_names}")
+        logger.critical(f"Data columns passed to model: {X_inference_const.columns.tolist()}")
         return
+    # --- END OF MODIFIED SECTION ---
 
-    # 8. Append predictions to original data and save
-    if len(predictions) == len(original_data_for_output):
-        original_data_for_output["prediction"] = predictions
-        output_df_to_save = original_data_for_output
-    else: # Fallback logic
-        logger.warning(f"Length of predictions ({len(predictions)}) does not match original data ({len(original_data_for_output)}).")
-        if current_df.index.equals(original_data_for_output.index) and X_inference_const.index.equals(current_df.index) : 
-            predictions_series = pd.Series(predictions, index=X_inference_const.index)
-            original_data_for_output["prediction"] = predictions_series 
-            output_df_to_save = original_data_for_output
-            logger.info("Aligned predictions to original data using index.")
-        else: 
-            logger.error("Cannot reliably align predictions. Saving predictions only.")
-            output_df_to_save = pd.DataFrame({'prediction': predictions})
-            if not X_inference_const.index.empty:
-                 output_df_to_save.index = X_inference_const.index 
+    # Append predictions and intervals to original data
+    # We use a left merge on the index to ensure all original rows are kept.
+    # Predictions/intervals will be NaN for rows that might have been dropped during transformations
+    # (though our current preprocessing/feature engineering for inference doesn't drop rows explicitly,
+    # errors or all-NaN features could lead to issues if not handled before this stage).
+    
+    output_df_to_save = original_data_for_output.copy()
+    
+    # Select and rename columns from pred_summary_df
+    predictions_to_add = pred_summary_df[['mean', 'obs_ci_lower', 'obs_ci_upper']].copy()
+    predictions_to_add.rename(columns={
+        'mean': 'prediction',
+        'obs_ci_lower': 'prediction_pi_lower',
+        'obs_ci_upper': 'prediction_pi_upper'
+    }, inplace=True)
+
+    # Merge based on index
+    output_df_to_save = output_df_to_save.merge(
+        predictions_to_add,
+        left_index=True,
+        right_index=True,
+        how='left' # Keeps all rows from original_data_for_output
+    )
+    logger.info(f"Predictions and intervals merged. Output shape: {output_df_to_save.shape}")
+    if output_df_to_save['prediction'].isnull().any():
+        logger.warning("Some predictions are NaN. This might be due to rows dropped during "
+                       "transformations if input data had issues, or if indices didn't align perfectly.")
+
 
     logger.info(f"Writing predictions to: {output_csv_path}")
     output_dir = os.path.dirname(output_csv_path)
@@ -281,18 +277,18 @@ def run_inference(input_csv_path: str, config_path: str, output_csv_path: str) -
     
     try:
         output_df_to_save.to_csv(output_csv_path, index=False)
-        logger.info("Inference complete. Predictions saved.")
+        logger.info("Inference complete. Predictions and intervals saved.")
     except Exception as e:
         logger.critical(f"Error saving predictions to '{output_csv_path}': {e}")
 
 def main_cli():
     parser = argparse.ArgumentParser(
-        description="Run batch inference on new data using a trained model and full preprocessing/feature engineering pipeline.",
+        description="Run batch inference on new data.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
     parser.add_argument("input_csv", help="Path to the new raw input CSV data file.")
-    parser.add_argument("config", help="Path to the YAML configuration file (e.g., config.yaml).")
-    parser.add_argument("output_csv", help="Path to save the output CSV file with predictions.")
+    parser.add_argument("config", help="Path to the YAML config file.")
+    parser.add_argument("output_csv", help="Path to save the output CSV with predictions.")
     args = parser.parse_args()
     run_inference(
         input_csv_path=args.input_csv,
