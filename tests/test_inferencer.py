@@ -18,9 +18,9 @@ import sys
 TEST_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = Path(TEST_DIR).parent 
 
-# Setup a logger for test setup diagnostics
+# Logger for test setup diagnostics
 test_setup_logger = logging.getLogger("test_inferencer_setup")
-if not test_setup_logger.handlers:
+if not test_setup_logger.handlers: # Avoid adding multiple handlers
     handler = logging.StreamHandler(sys.stdout) 
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     handler.setFormatter(formatter)
@@ -84,10 +84,9 @@ def mock_environment(tmp_path_factory):
     joblib.dump(mock_scaler, mock_scaler_path)
 
     transformed_df = mock_input_df.copy()
-    # Use logger_param for functions from preprocessing.py
     transformed_df = preprocess_drop_columns(transformed_df, cfg_preprocessing_drop_cols, logger_param=test_setup_logger)
     
-    dummy_feat_config = {
+    dummy_feat_config = { 
         'features': {
             'drop': cfg_features_drop_cols, 'audio_features': cfg_audio_features_for_poly, 
             'genre_features': cfg_genre_names_for_poly,
@@ -96,25 +95,24 @@ def mock_environment(tmp_path_factory):
                 'genre': {'degree': 2, 'include_bias': False, 'interaction_only': False}
             }}}
     if 'artist_genres' in transformed_df.columns: 
-        # Assuming functions from features.py take 'logger' as the keyword argument
-        transformed_df = features_parse_genres(transformed_df, dummy_feat_config, logger=test_setup_logger)
-    transformed_df = features_drop_columns(transformed_df, dummy_feat_config, logger=test_setup_logger)
+        # Use logger_param for functions from features.py if they were updated like preprocessing.py
+        # Assuming features.py functions were updated to accept 'logger_param'
+        transformed_df = features_parse_genres(transformed_df, dummy_feat_config, logger_param=test_setup_logger)
+    transformed_df = features_drop_columns(transformed_df, dummy_feat_config, logger_param=test_setup_logger)
     
     actual_audio_poly_inputs = [c for c in cfg_audio_features_for_poly if c in transformed_df.columns]
     dummy_feat_config['features']['audio_features'] = actual_audio_poly_inputs 
-    transformed_df = features_create_polynomial_features(transformed_df, dummy_feat_config, logger=test_setup_logger)
+    transformed_df = features_create_polynomial_features(transformed_df, dummy_feat_config, logger_param=test_setup_logger)
 
     mock_model_feature_names = []
     base_feats_present = [c for c in cfg_scale_cols if c in transformed_df.columns and pd.api.types.is_numeric_dtype(transformed_df[c])]
     if base_feats_present: mock_model_feature_names.extend(base_feats_present[:2]) 
-    
     for g_name in cfg_genre_names_for_poly: 
-        if f"genre_{g_name}" in transformed_df.columns: mock_model_feature_names.append(f"genre_{g_name}"); break
-    
+        if f"genre_{g_name.replace('&', 'and').replace('-', '_')}" in transformed_df.columns: # Match sanitized names
+             mock_model_feature_names.append(f"genre_{g_name.replace('&', 'and').replace('-', '_')}"); break
     for audio_f_base in cfg_audio_features_for_poly: 
-        poly_candidate_sq = f"poly_audio_{audio_f_base.replace(' ', '_')}^2"
+        poly_candidate_sq = f"poly_audio_{audio_f_base.replace(' ', '_').replace('^', 'pow')}^2" # Match sanitized names
         if poly_candidate_sq in transformed_df.columns: mock_model_feature_names.append(poly_candidate_sq); break
-    
     mock_model_feature_names = list(dict.fromkeys(mock_model_feature_names)) 
     if not mock_model_feature_names: 
         numeric_cols = transformed_df.select_dtypes(include=np.number).columns
@@ -127,8 +125,7 @@ def mock_environment(tmp_path_factory):
     with open(mock_selected_features_path, 'w') as f: json.dump(mock_selected_features_json, f)
 
     missing_feats_for_training = [f_name for f_name in mock_model_feature_names if f_name not in transformed_df.columns]
-    if missing_feats_for_training: pytest.fail(f"Mock model training features missing from transformed_df: {missing_feats_for_training}")
-    
+    if missing_feats_for_training: pytest.fail(f"Mock model training features missing: {missing_feats_for_training}")
     X_dummy_model = transformed_df[mock_model_feature_names].astype(float).fillna(0) 
     y_dummy_model = (X_dummy_model.iloc[:, 0] * 0.5 + np.random.rand(len(X_dummy_model)) * 0.05).fillna(0) 
     X_dummy_model_const = sm.add_constant(X_dummy_model, has_constant='add')
@@ -164,11 +161,10 @@ def test_run_inference_successful(mock_environment):
     output_csv = paths["output_dir"] / "output_predictions.csv" 
 
     command = [sys.executable, "-m", "src.inference.inferencer", input_csv, config_file, str(output_csv)]
-    test_setup_logger.info(f"Executing: {' '.join(command)}") 
     result = subprocess.run(command, cwd=paths["project_root"], capture_output=True, text=True, check=False)
 
     if result.returncode != 0: 
-        print("\n--- INFERENCE SCRIPT STDOUT ---\n", result.stdout)
+        print("\n--- INFERENCE SCRIPT STDOUT ---\n", result.stdout) 
         print("--- INFERENCE SCRIPT STDERR ---\n", result.stderr)
     
     assert result.returncode == 0, f"Inference script failed. Stderr: {result.stderr}"
@@ -185,11 +181,10 @@ def test_run_inference_successful(mock_environment):
     for col in expected_cols:
         assert col in predictions_df.columns, f"'{col}' column missing."
         assert pd.api.types.is_numeric_dtype(predictions_df[col]), f"'{col}' not numeric."
-        if predictions_df[col].notnull().any() and predictions_df[col].isnull().all():
-             test_setup_logger.warning(f"All values in '{col}' are NaN in output.")
+        if not predictions_df.empty and predictions_df[col].isnull().all(): # Check if column is all NaNs
+             test_setup_logger.warning(f"All values in '{col}' are NaN in output for {input_csv}.")
     
-    if predictions_df['prediction'].notnull().any(): 
-        assert predictions_df['prediction_pi_lower'].notnull().any()
-        assert predictions_df['prediction_pi_upper'].notnull().any()
-    test_setup_logger.info(f"Inference test passed for {input_csv}.")
+    if not predictions_df.empty and predictions_df['prediction'].notnull().any(): 
+        assert predictions_df['prediction_pi_lower'].notnull().any(), "'prediction_pi_lower' is all NaN when 'prediction' has values."
+        assert predictions_df['prediction_pi_upper'].notnull().any(), "'prediction_pi_upper' is all NaN when 'prediction' has values."
 
