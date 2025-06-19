@@ -1,5 +1,5 @@
 """
-features.py
+Config-driven, modular feature engineering.
 
 Config-driven, modular feature engineering.
 - Loads preprocessed data based on config.yaml.
@@ -21,7 +21,7 @@ from typing import Dict, Any, List, Optional
 logger = logging.getLogger(__name__)
 
 def get_logger(logging_config: Dict[str, Any], default_log_file: str = "logs/features.log") -> logging.Logger:
-    """Sets up and returns a logger based on the provided configuration."""
+    """Set up and return a logger based on the provided configuration."""
     log_file = logging_config.get("log_file", default_log_file)
     log_dir = os.path.dirname(log_file)
     if log_dir and not os.path.exists(log_dir):
@@ -49,7 +49,7 @@ def get_logger(logging_config: Dict[str, Any], default_log_file: str = "logs/fea
     return module_logger
 
 def load_config(config_path: str = "config.yaml") -> Dict[str, Any]:
-    """Loads the YAML configuration file."""
+    """Load the YAML configuration file."""
     _temp_logger = logging.getLogger(f"{__name__}.load_config") # Use a temporary logger
     if not os.path.isfile(config_path):
         _temp_logger.error(f"Configuration file not found: {config_path}")
@@ -95,7 +95,7 @@ def parse_genres(df: pd.DataFrame, config: Dict[str, Any], logger_param: logging
     return df_out
 
 def drop_irrelevant_columns(df: pd.DataFrame, config: Dict[str, Any], logger_param: logging.Logger) -> pd.DataFrame:
-    """Drops columns specified in config['features']['drop']."""
+    """Drop columns specified in config['features']['drop']."""
     drop_cols_list = config.get("features", {}).get("drop", [])
     if not drop_cols_list:
         logger_param.info("No columns specified for dropping in 'features.drop' config.")
@@ -112,7 +112,7 @@ def drop_irrelevant_columns(df: pd.DataFrame, config: Dict[str, Any], logger_par
     return df_dropped
 
 def create_polynomial_features(df: pd.DataFrame, config: Dict[str, Any], logger_param: logging.Logger) -> pd.DataFrame:
-    """Creates polynomial features based on 'audio' and 'genre' configurations."""
+    """Create polynomial features based on 'audio' and 'genre' configurations."""
     poly_cfg_main = config.get("features", {}).get("polynomial", {})
     if not poly_cfg_main:
         logger_param.info("No polynomial feature configuration. Skipping.")
@@ -180,7 +180,7 @@ def create_polynomial_features(df: pd.DataFrame, config: Dict[str, Any], logger_
     return df_out
 
 def select_features(df: pd.DataFrame, config: Dict[str, Any], logger_param: logging.Logger) -> pd.DataFrame:
-    """Selects final numeric features, excluding specified columns."""
+    """Select final numeric features, excluding specified columns."""
     features_cfg = config.get("features", {})
     exclude_cols = features_cfg.get("exclude", [])
     profiling_cols = features_cfg.get("profiling_variables", [])
@@ -198,7 +198,7 @@ def select_features(df: pd.DataFrame, config: Dict[str, Any], logger_param: logg
     return selected_df
 
 def log_feature_list(df_features: pd.DataFrame, path: str, logger_param: logging.Logger):
-    """Saves the list of final features to a text file."""
+    """Save the list of final features to a text file."""
     dir_ = os.path.dirname(path)
     if dir_ and not os.path.exists(dir_):
         os.makedirs(dir_, exist_ok=True)
@@ -212,7 +212,7 @@ def log_feature_list(df_features: pd.DataFrame, path: str, logger_param: logging
         logger_param.error(f"Error saving feature list to {path}: {e}")
 
 def main_features(config_path: str = "config.yaml"):
-    """Main function for feature engineering stage. Loads preprocessed data and applies transformations."""
+    """Execute feature engineering stage. Load preprocessed data and apply transformations."""
     try:
         config = load_config(config_path)
     except Exception as e:
