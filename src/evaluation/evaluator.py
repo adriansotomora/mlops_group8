@@ -1,5 +1,5 @@
 """
-evaluator.py
+Regression model evaluation utilities.
 
 Regression model evaluation utilities.
 - Computes standard regression metrics.
@@ -21,7 +21,7 @@ import statsmodels.api as sm # For type hinting and potential direct use
 logger = logging.getLogger(__name__)
 
 def _calculate_mape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-    """Calculates Mean Absolute Percentage Error, handling zeros in y_true."""
+    """Calculate Mean Absolute Percentage Error, handling zeros in y_true."""
     y_true, y_pred = np.array(y_true), np.array(y_pred)
     mask = y_true != 0
     if not np.any(mask):
@@ -30,7 +30,7 @@ def _calculate_mape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     return np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask])) * 100
 
 def round_metrics_dict(metrics_dict: Dict[str, Any], ndigits: int = 4) -> Dict[str, Any]:
-    """Rounds float values in a metrics dictionary."""
+    """Round float values in a metrics dictionary."""
     rounded = {}
     for k, v in metrics_dict.items():
         if isinstance(v, dict): # For nested dicts, like confusion matrix (not used here but good pattern)
@@ -47,7 +47,7 @@ def calculate_regression_metrics_from_predictions(
     num_features: int
 ) -> Dict[str, float]:
     """
-    Calculates a standard set of regression metrics from true and predicted values.
+    Calculate a standard set of regression metrics from true and predicted values.
 
     Args:
         y_true: Ground truth target values.
@@ -89,7 +89,7 @@ def evaluate_statsmodels_model(
     split_label: Optional[str] = None # e.g., "test", "validation"
 ) -> Dict[str, float]:
     """
-    Evaluates a trained statsmodels OLS regression model.
+    Evaluate a trained statsmodels OLS regression model.
 
     Args:
         model: Trained statsmodels OLS model.

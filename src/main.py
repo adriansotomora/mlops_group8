@@ -1,5 +1,5 @@
 """
-main.py
+Main entry point and orchestrator for the MLOps pipeline.
 
 Project entry point and orchestrator for the MLOps pipeline.
 Supports running preprocessing, feature engineering, model training, 
@@ -28,7 +28,7 @@ except ModuleNotFoundError as e:
 logger = logging.getLogger(__name__)
 
 def load_config(config_path: str = "config.yaml") -> Dict[str, Any]:
-    """Loads the YAML configuration file."""
+    """Load the YAML configuration file."""
     if not os.path.isfile(config_path):
         # Use basic logging for this critical error as main logger might not be set up
         logging.basicConfig(level=logging.ERROR, format="%(levelname)s: %(message)s")
@@ -39,7 +39,7 @@ def load_config(config_path: str = "config.yaml") -> Dict[str, Any]:
     return config
 
 def setup_logging(logging_config: Dict[str, Any], default_log_file: str = "logs/main_orchestrator.log"):
-    """Sets up logging for the application based on configuration."""
+    """Set up logging for the application based on configuration."""
     log_file = logging_config.get("log_file", default_log_file)
     log_dir = os.path.dirname(log_file)
     if log_dir and not os.path.exists(log_dir):
@@ -68,7 +68,7 @@ def setup_logging(logging_config: Dict[str, Any], default_log_file: str = "logs/
 
 
 def main():
-    """Parses arguments and runs selected pipeline stages."""
+    """Parse arguments and run selected pipeline stages."""
     parser = argparse.ArgumentParser(
         description="Main MLOps Pipeline Orchestrator.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter

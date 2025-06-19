@@ -1,5 +1,5 @@
 """
-model_draft.py
+Regression model training, evaluation, and artifact saving.
 
 This module implements regression model training, evaluation, and artifact saving
 using pre-processed and feature-engineered data.
@@ -26,7 +26,7 @@ from src.evaluation.evaluator import evaluate_statsmodels_model
 logger = logging.getLogger(__name__)
 
 def get_logger(logging_config: Dict[str, Any]) -> logging.Logger:
-    """Sets up and returns a logger based on the provided configuration."""
+    """Set up and return a logger based on the provided configuration."""
     log_file = logging_config.get("log_file", "logs/modeling.log") 
     log_dir = os.path.dirname(log_file)
     if log_dir and not os.path.exists(log_dir):
@@ -69,7 +69,7 @@ def get_logger(logging_config: Dict[str, Any]) -> logging.Logger:
     return module_logger
 
 def load_config(path: str = "config.yaml") -> Dict[str, Any]:
-    """Loads YAML configuration file."""
+    """Load YAML configuration file."""
     temp_logger = logging.getLogger(f"{__name__}.load_config")
     temp_logger.info(f"Loading configuration from: {path}")
     with open(path, "r") as f:
@@ -78,7 +78,7 @@ def load_config(path: str = "config.yaml") -> Dict[str, Any]:
     return config
 
 def validate_modeling_config(config: Dict[str, Any]) -> None:
-    """Validates the presence of essential keys in the modeling configuration."""
+    """Validate the presence of essential keys in the modeling configuration."""
     logger.info("Validating modeling configuration.")
     required_top_keys = ["artifacts", "data_split", "model", "logging", "target", "data_source"]
     for key in required_top_keys:
@@ -112,7 +112,8 @@ def stepwise_selection(
     verbose: bool = True
 ) -> List[str]:
     """
-    Performs forward-backward stepwise selection using p-values.
+    Perform forward-backward stepwise selection using p-values.
+    
     Returns a list of selected feature names.
     """
     included: List[str] = []
@@ -218,7 +219,7 @@ def save_model_artifacts(
     metrics: Dict[str, float], # These are raw metrics from the evaluator
     config: Dict[str, Any]
 ) -> None:
-    """Saves the trained model, selected features, and evaluation metrics based on config."""
+    """Save the trained model, selected features, and evaluation metrics based on config."""
     model_cfg = config["model"]
     art_cfg = config["artifacts"]
     active_model_type = model_cfg["active"] 
@@ -262,7 +263,7 @@ def save_model_artifacts(
 
 
 def main_modeling(config_path: str = "config.yaml") -> None:
-    """Main function to run the modeling pipeline."""
+    """Run the modeling pipeline."""
     try:
         config = load_config(config_path)
     except FileNotFoundError:

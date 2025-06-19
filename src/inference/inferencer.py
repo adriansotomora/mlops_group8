@@ -1,5 +1,5 @@
 """
-inferencer.py
+Batch inference using trained models and preprocessing pipelines.
 
 Performs batch inference using a trained model and preprocessing/feature
 engineering pipeline. Includes prediction intervals for regression models.
@@ -88,6 +88,7 @@ def _load_json(path: str, label: str) -> Any:
     return data
 
 def run_inference(input_csv_path: str, config_path: str, output_csv_path: str) -> None:
+    """Run batch inference on input data using trained model."""
     try:
         with open(config_path, "r") as f:
             config = yaml.safe_load(f)
@@ -282,6 +283,7 @@ def run_inference(input_csv_path: str, config_path: str, output_csv_path: str) -
         logger.critical(f"Error saving predictions to '{output_csv_path}': {e}")
 
 def main_cli():
+    """Run CLI entry point for batch inference."""
     parser = argparse.ArgumentParser(
         description="Run batch inference on new data.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
