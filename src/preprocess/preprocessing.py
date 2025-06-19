@@ -1,3 +1,9 @@
+"""
+Data preprocessing pipeline for the MLOps project.
+
+This module handles data cleaning, outlier removal, scaling, and preparation
+for the feature engineering stage.
+"""
 import os
 import logging
 import sys 
@@ -20,7 +26,7 @@ except ModuleNotFoundError:
 logger = logging.getLogger(__name__)
 
 def get_logger(logging_config: Dict[str, Any], default_log_file: str = "logs/preprocessing.log") -> logging.Logger:
-    """Sets up and returns a logger based on the provided configuration."""
+    """Set up and return a logger based on the provided configuration."""
     log_file = logging_config.get("log_file", default_log_file)
     log_dir = os.path.dirname(log_file)
     if log_dir and not os.path.exists(log_dir):
@@ -48,7 +54,7 @@ def get_logger(logging_config: Dict[str, Any], default_log_file: str = "logs/pre
     return module_logger
 
 def load_config(path: str = "config.yaml") -> Dict[str, Any]:
-    """Loads the YAML configuration file."""
+    """Load the YAML configuration file."""
     _current_logger = logging.getLogger(__name__) 
     _current_logger.info(f"Loading configuration from: {path}")
     if not os.path.isfile(path):
@@ -60,7 +66,7 @@ def load_config(path: str = "config.yaml") -> Dict[str, Any]:
     return config
 
 def validate_preprocessing_config(config: Dict[str, Any], logger_param: Optional[logging.Logger] = None) -> None:
-    """Validates essential keys in the preprocessing configuration."""
+    """Validate essential keys in the preprocessing configuration."""
     effective_logger = logger_param if logger_param else logger
     effective_logger.info("Validating preprocessing configuration.")
     required_top_keys = ["preprocessing", "artifacts", "data_source", "logging"]
@@ -87,7 +93,7 @@ def validate_preprocessing_config(config: Dict[str, Any], logger_param: Optional
     effective_logger.info("Preprocessing configuration validation successful.")
 
 def drop_columns(df: pd.DataFrame, columns_to_drop: List[str], logger_param: Optional[logging.Logger] = None) -> pd.DataFrame:
-    """Drops specified columns from the DataFrame."""
+    """Drop specified columns from the DataFrame."""
     effective_logger = logger_param if logger_param else logger
     if not columns_to_drop:
         effective_logger.info("No columns specified for dropping. Skipping.")
@@ -104,7 +110,7 @@ def drop_columns(df: pd.DataFrame, columns_to_drop: List[str], logger_param: Opt
     return df_dropped
 
 def remove_outliers_iqr(df: pd.DataFrame, features: List[str], iqr_multiplier: float, logger_param: Optional[logging.Logger] = None) -> pd.DataFrame:
-    """Removes outliers from specified numeric features using the IQR method."""
+    """Remove outliers from specified numeric features using the IQR method."""
     effective_logger = logger_param if logger_param else logger
     if not features:
         effective_logger.info("No features specified for outlier removal. Skipping.")
@@ -183,7 +189,7 @@ def scale_columns(df: pd.DataFrame, columns_to_scale: List[str], method: str, lo
     return df_scaled, scaler_obj
 
 def save_data_and_artifact(df: pd.DataFrame, data_path: str, artifact: Optional[Any], artifact_path: Optional[str], logger_param: Optional[logging.Logger] = None) -> None:
-    """Saves the processed DataFrame and the preprocessing artifact (e.g., scaler)."""
+    """Save the processed DataFrame and the preprocessing artifact (e.g., scaler)."""
     effective_logger = logger_param if logger_param else logger
     
     data_dir = os.path.dirname(data_path)
@@ -202,7 +208,7 @@ def save_data_and_artifact(df: pd.DataFrame, data_path: str, artifact: Optional[
         effective_logger.warning("Scaler object generated, but no 'preprocessing_pipeline' path in config. Scaler not saved.")
 
 def main_preprocessing(config_path: str = "config.yaml") -> None:
-    """Main function to run the data preprocessing pipeline, including holdout split."""
+    """Run the data preprocessing pipeline, including holdout split."""
     try:
         config = load_config(config_path) 
     except Exception as e: 

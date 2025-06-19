@@ -1,5 +1,5 @@
 """
-data_loader.py
+Utility for loading the initial raw CSV dataset for the MLOps pipeline.
 
 Utility for loading the initial raw CSV dataset for the MLOps pipeline,
 driven by a YAML configuration file.
@@ -15,7 +15,7 @@ from typing import Dict, Any
 logger = logging.getLogger(__name__)
 
 def load_config(config_path: str = "config.yaml") -> Dict[str, Any]:
-    """Loads the YAML configuration file."""
+    """Load the YAML configuration file."""
     if not os.path.isfile(config_path):
         logger.error(f"Configuration file not found: {config_path}") 
         raise FileNotFoundError(f"Configuration file not found: {config_path}")
@@ -30,7 +30,7 @@ def _read_csv_data(
     header: int = 0,
     encoding: str = "utf-8"
 ) -> pd.DataFrame:
-    """Helper function to read data from a CSV file with error handling."""
+    """Read data from a CSV file with error handling."""
     if not path or not isinstance(path, str):
         logger.error("No valid data path provided for CSV loading.")
         raise ValueError("No valid data path specified for CSV loading.")
@@ -48,7 +48,8 @@ def _read_csv_data(
 
 def get_raw_data(config_path: str = "config.yaml") -> pd.DataFrame:
     """
-    Loads the raw dataset based on specifications in the configuration file.
+    Load the raw dataset based on specifications in the configuration file.
+    
     Primarily intended for loading the initial raw CSV data for the pipeline.
     """
     try:

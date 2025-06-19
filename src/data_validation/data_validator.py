@@ -1,4 +1,10 @@
 
+"""
+Data validation utilities for the MLOps pipeline.
+
+This module provides functions to validate data against defined schemas
+and generate validation reports.
+"""
 import logging
 import os
 import json
@@ -28,9 +34,7 @@ def _validate_column(
     warnings: List[str],
     report: Dict[str, Any]
 ) -> None:
-    """
-    Validate a single column in the dataframe according to the schema.
-    """
+    """Validate a single column in the dataframe according to the schema."""
     col = col_schema["name"]
     col_report = {}
     if col not in dataframe.columns:
@@ -98,6 +102,7 @@ def _validate_column(
             col_report["above_max"] = int(above)
 
 def validate_data(dataframe, config_dict):
+    """Validate dataframe against schema defined in config."""
     dv_cfg = config_dict.get("data_validation", {})
     report_path = str(dv_cfg.get("report_path", "logs/validation_report.json"))
     enabled = dv_cfg.get("enabled", True)
