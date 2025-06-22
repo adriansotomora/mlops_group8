@@ -29,12 +29,12 @@ jobs:
     - name: Run tests with coverage
       shell: bash -l {0}
       run: |
-        micromamba run -n group8_full pytest -q --cov=src --cov-report=term-missing --cov-fail-under=75
+        pytest -q --cov=src --cov-report=term-missing --cov-fail-under=75
         
     - name: Run linting
       shell: bash -l {0}
       run: |
-        flake8 --exit-zero
+        flake8 . --exit-zero
         
     - name: Run MLflow pipeline
       shell: bash -l {0}
