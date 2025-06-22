@@ -1,0 +1,8 @@
+stages:
+  preprocess:
+    cmd: python src/preprocess/run.py
+    deps:
+    - data/raw
+    - src/preprocess/run.py
+    outs:
+    - data/processed
