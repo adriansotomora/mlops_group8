@@ -12,7 +12,8 @@ from sklearn.preprocessing import MinMaxScaler
 from typing import Dict, Any, List 
 import logging 
 from pathlib import Path 
-import sys 
+import sys
+from unittest.mock import MagicMock, patch
 
 # Define base paths relative to this test file
 TEST_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -187,4 +188,53 @@ def test_run_inference_successful(mock_environment):
     if not predictions_df.empty and predictions_df['prediction'].notnull().any(): 
         assert predictions_df['prediction_pi_lower'].notnull().any(), "'prediction_pi_lower' is all NaN when 'prediction' has values."
         assert predictions_df['prediction_pi_upper'].notnull().any(), "'prediction_pi_upper' is all NaN when 'prediction' has values."
+
+
+def test_run_inference_missing_artifacts(tmp_path):
+    """Test run_inference with missing artifact paths to cover lines 128-130."""
+    from src.inference.inferencer import run_inference
+    
+    config = {
+        "logging": {"level": "INFO"},
+        "artifacts": {},  # Missing preprocessing_pipeline
+        "model": {"active": "linear_regression", "linear_regression": {}},  # Missing save_path
+        "data_source": {"delimiter": ",", "header": 0, "encoding": "utf-8"}
+    }
+    config_path = tmp_path / "test_config.yaml"
+    with open(config_path, "w") as f:
+        yaml.safe_dump(config, f)
+    
+    run_inference(
+        "/tmp/input.csv",
+        str(config_path),
+        "/tmp/output.csv"
+    )
+
+
+def test_run_inference_missing_input_file(tmp_path):
+    """Test run_inference with missing input file to cover lines 157-159."""
+    from src.inference.inferencer import run_inference
+    
+    config = {
+        "logging": {"level": "INFO"},
+        "artifacts": {"preprocessing_pipeline": "/tmp/scaler.pkl"},
+        "model": {
+            "active": "linear_regression",
+            "linear_regression": {
+                "save_path": "/tmp/model.pkl",
+                "selected_features_path": "/tmp/features.json"
+            }
+        },
+        "data_source": {"delimiter": ",", "header": 0, "encoding": "utf-8"}
+    }
+    config_path = tmp_path / "test_config.yaml"
+    with open(config_path, "w") as f:
+        yaml.safe_dump(config, f)
+    
+    # Test with non-existent input file - should return early
+    run_inference(
+        "/tmp/nonexistent_input.csv",
+        str(config_path),
+        str(tmp_path / "output.csv")
+    )
 
