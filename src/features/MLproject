@@ -1,5 +1,4 @@
 name: features
-conda_env: ../../environment.yml
 
 entry_points:
   main:

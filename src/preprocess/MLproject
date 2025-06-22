@@ -1,5 +1,4 @@
 name: preprocess
-conda_env: ../../environment.yml
 
 entry_points:
   main:

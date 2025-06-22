@@ -1,6 +1,5 @@
 # MLproject (root of repo)
 name: mlops_group8_spotify
-conda_env: environment.yml
 
 entry_points:
 
