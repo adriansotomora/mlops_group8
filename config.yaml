@@ -2,7 +2,7 @@
 
 main:
   WANDB_PROJECT: mlops_group8
-  WANDB_ENTITY: manuelbonnelly-ie-university
+  WANDB_ENTITY: yeabsiraseleshi-ie-university
   steps: all
   hydra_options: ""
 
