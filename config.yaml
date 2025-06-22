@@ -1,5 +1,11 @@
 # This file is used to set up the parameters for data loading, logging, and other settings.
 
+main:
+  WANDB_PROJECT: mlops_group8_spotify_prediction
+  WANDB_ENTITY: hiroinie
+  steps: all
+  hydra_options: ""
+
 data_source:
   raw_path: "data/raw/Songs_2025.csv" # Path to the original raw data file
   processed_path: "./data/processed/Songs_2025_processed.csv" # Path for saving/loading the main preprocessed dataset (after holdout split)

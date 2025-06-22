@@ -1,0 +1,9 @@
+name: model
+
+entry_points:
+  main:
+    parameters:
+      hydra_options:
+        type: str
+        default: ""
+    command: python run.py

@@ -178,3 +178,148 @@ def test_main_modeling_e2e(tmp_path, minimal_model_test_config, dummy_data_for_m
 
     test_setup_logger_model.info("test_main_modeling_e2e passed successfully.")
 
+
+def test_get_logger_function():
+    """Test get_logger function to cover missing lines 33, 46-65."""
+    from src.model.model import get_logger
+    
+    config = {"log_file": "/tmp/test_model.log", "level": "DEBUG"}
+    logger = get_logger(config)
+    
+    assert logger is not None
+    assert logger.name == "src.model.model"
+    
+    # Test with config that creates directory
+    config_with_dir = {"log_file": "/tmp/test_logs/model.log", "level": "INFO"}
+    logger2 = get_logger(config_with_dir)
+    assert logger2 is not None
+    
+    logger3 = get_logger({})
+    assert logger3 is not None
+
+
+def test_main_modeling_config_not_found():
+    """Test main_modeling with missing config file to cover lines 269-274."""
+    from src.model.model import main_modeling
+    
+    main_modeling(config_path="non_existent_config.yaml")
+
+
+def test_main_modeling_yaml_error(tmp_path):
+    """Test main_modeling with invalid YAML to cover lines 272-274."""
+    from src.model.model import main_modeling
+    
+    invalid_yaml_path = tmp_path / "invalid.yaml"
+    with open(invalid_yaml_path, "w") as f:
+        f.write("invalid: yaml: content: [")
+    
+    main_modeling(config_path=str(invalid_yaml_path))
+
+
+def test_main_modeling_config_validation_error(tmp_path):
+    """Test main_modeling with invalid config to cover lines 281-283."""
+    from src.model.model import main_modeling
+    
+    invalid_config = {"some_key": "some_value"}
+    config_path = tmp_path / "invalid_config.yaml"
+    with open(config_path, "w") as f:
+        yaml.safe_dump(invalid_config, f)
+    
+    main_modeling(config_path=str(config_path))
+
+
+def test_main_modeling_missing_features_file(tmp_path, minimal_model_test_config):
+    """Test main_modeling with missing features file to cover lines 296-301."""
+    from src.model.model import main_modeling
+    
+    test_config = minimal_model_test_config
+    config_path = tmp_path / "test_config.yaml"
+    with open(config_path, "w") as f:
+        yaml.safe_dump(test_config, f)
+    
+    main_modeling(config_path=str(config_path))
+
+
+def test_main_modeling_missing_target_file(tmp_path, minimal_model_test_config, dummy_data_for_model_tests):
+    """Test main_modeling with missing target file to cover lines 308-313."""
+    from src.model.model import main_modeling
+    
+    test_config = minimal_model_test_config
+    X_dummy, y_dummy = dummy_data_for_model_tests
+    
+    features_csv_path = Path(test_config["artifacts"]["processed_dir"]) / test_config["artifacts"]["engineered_features_filename"]
+    X_dummy.to_csv(features_csv_path, index=False)
+    
+    config_path = tmp_path / "test_config.yaml"
+    with open(config_path, "w") as f:
+        yaml.safe_dump(test_config, f)
+    
+    main_modeling(config_path=str(config_path))
+
+
+def test_main_modeling_missing_target_column(tmp_path, minimal_model_test_config, dummy_data_for_model_tests):
+    """Test main_modeling with missing target column to cover lines 316-317."""
+    from src.model.model import main_modeling
+    
+    test_config = minimal_model_test_config
+    X_dummy, y_dummy = dummy_data_for_model_tests
+    
+    features_csv_path = Path(test_config["artifacts"]["processed_dir"]) / test_config["artifacts"]["engineered_features_filename"]
+    X_dummy.to_csv(features_csv_path, index=False)
+    
+    # Create target file without the expected target column
+    target_source_csv_path = Path(test_config["data_source"]["processed_path"])
+    df_for_target_source = X_dummy.copy()  # Don't add target column
+    df_for_target_source.to_csv(target_source_csv_path, index=False)
+    
+    config_path = tmp_path / "test_config.yaml"
+    with open(config_path, "w") as f:
+        yaml.safe_dump(test_config, f)
+    
+    main_modeling(config_path=str(config_path))
+
+
+def test_main_modeling_empty_data(tmp_path, minimal_model_test_config):
+    """Test main_modeling with empty data to cover lines 333-334."""
+    from src.model.model import main_modeling
+    
+    test_config = minimal_model_test_config
+    
+    features_csv_path = Path(test_config["artifacts"]["processed_dir"]) / test_config["artifacts"]["engineered_features_filename"]
+    empty_df = pd.DataFrame()
+    empty_df.to_csv(features_csv_path, index=False)
+    
+    target_source_csv_path = Path(test_config["data_source"]["processed_path"])
+    empty_target_df = pd.DataFrame({test_config["target"]: []})
+    empty_target_df.to_csv(target_source_csv_path, index=False)
+    
+    config_path = tmp_path / "test_config.yaml"
+    with open(config_path, "w") as f:
+        yaml.safe_dump(test_config, f)
+    
+    main_modeling(config_path=str(config_path))
+
+
+def test_main_modeling_unsupported_model_type(tmp_path, minimal_model_test_config, dummy_data_for_model_tests):
+    """Test main_modeling with unsupported model type to cover lines 362-363."""
+    from src.model.model import main_modeling
+    
+    test_config = minimal_model_test_config
+    test_config["model"]["active"] = "unsupported_model_type"
+    X_dummy, y_dummy = dummy_data_for_model_tests
+    
+    # Create mock input CSV files
+    features_csv_path = Path(test_config["artifacts"]["processed_dir"]) / test_config["artifacts"]["engineered_features_filename"]
+    X_dummy.to_csv(features_csv_path, index=False)
+
+    target_source_csv_path = Path(test_config["data_source"]["processed_path"])
+    df_for_target_source = X_dummy.copy() 
+    df_for_target_source[test_config["target"]] = y_dummy 
+    df_for_target_source.to_csv(target_source_csv_path, index=False)
+    
+    config_path = tmp_path / "test_config.yaml"
+    with open(config_path, "w") as f:
+        yaml.safe_dump(test_config, f)
+    
+    main_modeling(config_path=str(config_path))
+

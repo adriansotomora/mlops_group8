@@ -47,6 +47,103 @@ MLOps Group 8 - Spotify Music Popularity Prediction🎵 Project OverviewThis MLO
 │   └── main.py                # Main pipeline orchestrator script (PREFERRED ENTRY POINT)
 └── tests/                     # Test suite
     ├── __init__.py
+
+## Quick Start
+
+### Prerequisites
+- Conda or Miniconda installed
+- Git
+- Docker (optional, for containerized deployment)
+
+### Setup Environment
+```bash
+# Clone the repository
+git clone https://github.com/hiroinie/mlops_group8.git
+cd mlops_group8
+
+# Create and activate conda environment
+conda env create -f environment.yml
+conda activate group8_full
+
+# Set up environment variables (copy and edit)
+cp .env.example .env
+# Edit .env with your WANDB_API_KEY and other settings
+```
+
+### Run the Pipeline
+
+#### Using MLflow Projects (Recommended)
+```bash
+# Run complete training pipeline
+mlflow run . --no-conda
+
+# Run specific steps
+mlflow run . -P steps="preprocess,features,model" --no-conda
+```
+
+#### Using Direct Python Execution
+```bash
+# Run complete training pipeline
+python src/main.py
+
+# Run specific stages
+python src/main.py --stage preprocess
+python src/main.py --stage features
+python src/main.py --stage model
+python src/main.py --stage inference --input_file data/raw_holdout/inference_holdout_data.csv --output_file data/predictions/predictions.csv
+```
+
+### API Serving
+
+#### Start FastAPI Server
+```bash
+# Start the API server
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+# Or using Docker
+docker build -t mlops-group8-api .
+docker run -p 8000:8000 mlops-group8-api
+```
+
+#### API Endpoints
+- `GET /` - Welcome message
+- `GET /health` - Health check and model status
+- `POST /predict` - Single prediction
+- `POST /predict_batch` - Batch predictions
+
+Example prediction request:
+```bash
+curl -X POST "http://localhost:8000/predict" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "danceability": 0.735,
+       "energy": 0.578,
+       "liveness": 0.0985,
+       "loudness": -11.84,
+       "speechiness": 0.0596,
+       "tempo": 75.0,
+       "valence": 0.471,
+       "duration_ms": 207959.0,
+       "artist_popularity": 63,
+       "acousticness": 0.514,
+       "key": 1.0
+     }'
+```
+
+### Experiment Tracking
+
+View experiments and model performance at: [Weights & Biases Project](https://wandb.ai/hiroinie/mlops_group8_spotify_prediction)
+
+### Testing
+```bash
+# Run tests with coverage
+pytest --cov=src --cov-report=term-missing
+
+# Run linting
+flake8 .
+```
+
+
     ├── mock_data/
     │   └── mock_data_spotify.csv # Mock data for testing various components
     ├── test_data_loader.py
@@ -68,3 +165,36 @@ Example (using the holdout data created by preprocessing.py):(Assumes data_sourc
 The inference process will apply all necessary data transformations using the saved scaler and feature configurations before generating predictions and prediction intervals. The output CSV will include the original data along with prediction, prediction_pi_lower, and prediction_pi_upper columns.✅ TestingA comprehensive test suite is located in the tests/ directory. Each core module has corresponding test files (e.g., test_preprocessing.py, test_inferencer.py).Running All Tests:From the project root directory, execute:python -m pytest -v
 This command discovers and runs all tests with verbose output.Running Tests with Coverage:To generate a code coverage report (ensure pytest-cov is installed):python -m pytest -v --cov=src --cov-report=term-missing --cov-report=html
 This shows a terminal summary and creates a detailed HTML report in the htmlcov/ directory.📦 Artifact LocationsKey artifacts generated and used by the pipeline are stored in the following default locations (customizable in config.yaml):Data:Raw data: data/raw/Songs_2025.csv (or as per data_source.raw_path)Raw holdout data (for inference): data/raw_holdout/inference_holdout_data.csv (or as per data_source.inference_holdout_path)Preprocessed data (output of preprocessing.py): data/processed/Songs_2025_processed.csv (or as per data_source.processed_path)Engineered features (output of features.py): data/processed/features.csv (or as per artifacts.engineered_features_filename)Feature list (output by features.py): data/processed/feature_list.txt (or as per artifacts.feature_list_filename)Predictions (output of inferencer.py): data/predictions/ (path specified via CLI)Models & Related Artifacts:Preprocessing scaler: models/preprocessing_pipeline.pkl (or as per artifacts.preprocessing_pipeline)Trained model: models/linear_regression.pkl (or as per model.linear_regression.save_path)Selected features list (for model): models/linear_regression_selected_features.json (or as per model.linear_regression.selected_features_path)Evaluation metrics: models/metrics.json (or as per artifacts.metrics_path)Logs: logs/ (e.g., logs/main_orchestrator.log, logs/preprocessing.log, etc., as defined in logging.log_file in config.yaml or per script defaults)🤝 ContributingContributions are welcome! Please follow these general guidelines:Fork the repository.Create your feature branch: git checkout -b feature/your-amazing-featureCommit your changes: git commit -am 'Add some amazing feature'Push to the branch: git push origin feature/your-amazing-featureOpen a Pull Request against the main branch for review.Please adhere to code quality standards by using black for code formatting and flake8 for linting. Ensure that new features are accompanied by relevant tests and that all existing tests pass.
+
+### Experiment Tracking
+
+View experiments and model performance at: [Weights & Biases Project](https://wandb.ai/hiroinie/mlops_group8_spotify_prediction)
+
+## MLOps Features
+
+### Hydra Configuration Management
+- Centralized configuration in `config.yaml`
+- Runtime parameter overrides via CLI
+- Environment-specific configurations
+
+### MLflow Projects Integration
+- Reproducible pipeline execution with `mlflow run .`
+- Step-by-step orchestration via individual MLproject files
+- Parameter passing and artifact tracking
+
+### Weights & Biases Experiment Tracking
+- Automatic experiment logging and versioning
+- Model performance metrics and artifacts
+- Run comparison and analysis dashboards
+
+### FastAPI Model Serving
+- REST API endpoints for real-time predictions
+- Batch prediction support
+- Health checks and model status monitoring
+- Docker containerization for deployment
+
+### CI/CD Pipeline
+- Automated testing with coverage requirements (≥75%)
+- Linting and code quality checks
+- MLflow pipeline validation
+- GitHub Actions integration
