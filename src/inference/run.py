@@ -16,7 +16,11 @@ def main():
     )
     
     try:
-        run_inference(config_path="../../config.yaml")
+        run_inference(
+            input_csv_path="data/raw/Songs_2025.csv",
+            config_path="../../config.yaml", 
+            output_csv_path="data/predictions/inference_output.csv"
+        )
         wandb.log({"inference_status": "completed"})
     except Exception as e:
         wandb.log({"inference_status": "failed", "error": str(e)})

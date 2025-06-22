@@ -43,4 +43,4 @@ jobs:
         MLOPS_ENV: ${{ secrets.MLOPS_ENV }}
         WANDB_MODE: offline
       run: |
-        mlflow run . --no-conda
+        mlflow run . --env-manager local
