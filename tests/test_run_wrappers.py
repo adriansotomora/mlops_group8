@@ -180,6 +180,10 @@ def test_inference_run_success(mock_run_inference, mock_wandb):
     assert init_call[1]["entity"] == "test_entity"
     assert init_call[1]["job_type"] == "inference"
     
-    mock_run_inference.assert_called_once_with(config_path="../../config.yaml")
+    mock_run_inference.assert_called_once_with(
+        input_csv_path="data/raw/Songs_2025.csv",
+        config_path="../../config.yaml", 
+        output_csv_path="data/predictions/inference_output.csv"
+    )
     mock_wandb.log.assert_called_with({"inference_status": "completed"})
     mock_wandb.finish.assert_called_once()
