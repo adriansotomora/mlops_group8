@@ -11,6 +11,9 @@ import yaml
 import pandas as pd
 import joblib 
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
+from sklearn.impute import SimpleImputer
+from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
 from sklearn.model_selection import train_test_split
 from typing import Dict, Any, Tuple, Optional, List
 
@@ -151,43 +154,6 @@ def remove_outliers_iqr(df: pd.DataFrame, features: List[str], iqr_multiplier: f
     effective_logger.info(f"Total rows removed by outlier processing: {total_rows_removed}. Shape after: {df_clean.shape}")
     return df_clean
 
-def scale_columns(df: pd.DataFrame, columns_to_scale: List[str], method: str, logger_param: Optional[logging.Logger] = None) -> Tuple[pd.DataFrame, Optional[Any]]:
-    """Scales specified numeric columns using the chosen method."""
-    effective_logger = logger_param if logger_param else logger
-    if not columns_to_scale:
-        effective_logger.info("No columns specified for scaling. Skipping.")
-        return df, None
-
-    df_scaled = df.copy()
-    scaler_obj = None 
-    
-    actual_cols_to_scale = [] 
-    for col_name in columns_to_scale:
-        if col_name not in df_scaled.columns:
-            effective_logger.warning(f"Column '{col_name}' for scaling not found. Skipping.")
-            continue
-        if not pd.api.types.is_numeric_dtype(df_scaled[col_name]):
-            effective_logger.warning(f"Column '{col_name}' for scaling is not numeric. Skipping.")
-            continue
-        actual_cols_to_scale.append(col_name)
-
-    if not actual_cols_to_scale:
-        effective_logger.warning("No valid numeric columns found for scaling. Skipping.")
-        return df, None
-
-    effective_logger.info(f"Scaling columns {actual_cols_to_scale} with '{method}' method.")
-    if method.lower() == "minmax":
-        scaler_obj = MinMaxScaler()
-    elif method.lower() == "standard":
-        scaler_obj = StandardScaler()
-    else:
-        effective_logger.error(f"Unsupported scaling method: '{method}'. Choose 'minmax' or 'standard'.")
-        return df, None 
-
-    df_scaled[actual_cols_to_scale] = scaler_obj.fit_transform(df_scaled[actual_cols_to_scale])
-    effective_logger.info("Scaling complete.")
-    return df_scaled, scaler_obj
-
 def save_data_and_artifact(df: pd.DataFrame, data_path: str, artifact: Optional[Any], artifact_path: Optional[str], logger_param: Optional[logging.Logger] = None) -> None:
     """Save the processed DataFrame and the preprocessing artifact (e.g., scaler)."""
     effective_logger = logger_param if logger_param else logger
@@ -295,13 +261,51 @@ def main_preprocessing(config_path: str = "config.yaml") -> None:
             pre_cfg["outlier_removal"].get("iqr_multiplier", 1.5)
         )
 
-    scaler_artifact = None
-    if pre_cfg.get("scale", {}).get("columns"):
-        current_df, scaler_artifact = scale_columns(
-            current_df,
-            pre_cfg["scale"].get("columns", []),
-            pre_cfg["scale"].get("method", "minmax")
+    # --- Build and Apply Preprocessing Pipeline ---
+    logger.info("Building preprocessing pipeline (imputation + scaling)...")
+    preprocessor_artifact = None
+    numeric_features = pre_cfg.get("scale", {}).get("columns", [])
+
+    if not numeric_features:
+        logger.info("No numeric features to scale/impute specified in config. Skipping pipeline.")
+    else:
+        numeric_transformer_steps = []
+        imputation_cfg = pre_cfg.get("imputation", {})
+        if imputation_cfg.get("enabled", True):  # Default to enabled
+            strategy = imputation_cfg.get("strategy", "mean")
+            logger.info(f"Pipeline: Adding imputer with strategy '{strategy}'.")
+            numeric_transformer_steps.append(('imputer', SimpleImputer(strategy=strategy)))
+
+        scale_cfg = pre_cfg.get("scale", {})
+        method = scale_cfg.get("method", "minmax")
+        if method.lower() == "minmax":
+            scaler = MinMaxScaler()
+        elif method.lower() == "standard":
+            scaler = StandardScaler()
+        else:
+            logger.warning(f"Unsupported scaling method '{method}'. Scaler not added.")
+            scaler = None
+
+        if scaler:
+            logger.info(f"Pipeline: Adding scaler with method '{method}'.")
+            numeric_transformer_steps.append(('scaler', scaler))
+
+        numeric_pipeline = Pipeline(steps=numeric_transformer_steps)
+
+        preprocessor_artifact = ColumnTransformer(
+            transformers=[
+                ('num', numeric_pipeline, numeric_features)
+            ],
+            remainder='passthrough'
         )
+
+        logger.info("Fitting and applying preprocessing pipeline...")
+        current_df = pd.DataFrame(
+            preprocessor_artifact.fit_transform(current_df),
+            columns=current_df.columns,
+            index=current_df.index
+        )
+        logger.info("Preprocessing pipeline applied. New shape: %s", current_df.shape)
 
     processed_output_path_relative = data_source_cfg.get("processed_path")
     scaler_artifact_path_relative = art_cfg.get("preprocessing_pipeline")
@@ -312,7 +316,7 @@ def main_preprocessing(config_path: str = "config.yaml") -> None:
         scaler_artifact_path_absolute = None
         if scaler_artifact_path_relative:
             scaler_artifact_path_absolute = os.path.join(config_dir, scaler_artifact_path_relative)
-        save_data_and_artifact(current_df, processed_output_path_absolute, scaler_artifact, scaler_artifact_path_absolute)
+        save_data_and_artifact(current_df, processed_output_path_absolute, preprocessor_artifact, scaler_artifact_path_absolute)
 
     logger.info("--- Preprocessing Stage Completed ---")
 
