@@ -9,8 +9,8 @@ from src.preprocess.preprocessing import main_preprocessing
 def main():
     run_name = f"preprocess_{datetime.now():%Y%m%d_%H%M%S}"
     run = wandb.init(
-        project=os.environ.get("WANDB_PROJECT", "mlops_group8_spotify_prediction"),
-        entity=os.environ.get("WANDB_ENTITY", "hiroinie"),
+        project=os.environ.get("WANDB_PROJECT", "mlops_group8"),
+        entity=os.environ.get("WANDB_ENTITY", "yeabsiraseleshi-ie-university"),
         job_type="preprocess",
         name=run_name,
     )
