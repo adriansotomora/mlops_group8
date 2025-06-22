@@ -24,6 +24,104 @@ logging:
   format: "%(asctime)s - %(levelname)s - %(name)s - %(module)s - %(message)s" # Detailed log format
   datefmt: "%Y-%m-%d %H:%M:%S"          # Timestamp format for logs
 
+data_load:
+  output_dir: "data/processed"
+
+data_validation:
+  input_artifact: "raw_data:latest"
+  output_artifact: "validated_data"
+  report_path: "logs/validation_report.json"
+  enabled: true
+  action_on_error: "raise"
+  schema: # Expected schema for the raw data (raw_path)
+    columns:
+      - name: "year"
+        dtype: "int"
+        required: true
+        min: 2000
+        max: 2025
+      - name: "track_name"
+        dtype: "str"
+        required: true
+      - name: "track_popularity" # Target variable
+        dtype: "int"
+        required: true
+        min: 0
+        max: 100
+      - name: "album"
+        dtype: "str"
+        required: true
+      - name: "artist_name"
+        dtype: "str"
+        required: true
+      - name: "artist_genres" 
+        dtype: "str"      
+        required: true
+      - name: "artist_popularity"
+        dtype: "int"
+        required: true
+        min: 0
+        max: 100
+      - name: "danceability"
+        dtype: "float"
+        required: true # Assuming required for scaling
+        min: 0.0 
+        max: 1.0
+      - name: "energy"
+        dtype: "float"
+        required: true # Assuming required for scaling
+        min: 0.0 
+        max: 1.0
+      - name: "key"
+        dtype: "float" # Often int (0-11), but float if scaled
+        required: true
+        min: 0.0
+        max: 11.0
+      - name: "loudness"
+        dtype: "float"
+        required: true
+        min: -60.0 # Adjusted typical min
+      - name: "mode" # Binary (0 or 1)
+        dtype: "float" 
+        required: true
+        min: 0.0
+        max: 1.0
+      - name: "speechiness"
+        dtype: "float"
+        required: true
+        min: 0.0
+        max: 1.0
+      - name: "acousticness"
+        dtype: "float"
+        required: true
+        min: 0.0
+        max: 1.0
+      - name: "instrumentalness" # Will be dropped by preprocessing.drop_columns
+        dtype: "float"
+        required: true # Or false if sometimes missing before drop
+        min: 0.0
+        max: 1.0
+      - name: "liveness"
+        dtype: "float"
+        required: true
+        min: 0.0
+        max: 1.0
+      - name: "valence"
+        dtype: "float"
+        required: true
+        min: 0.0
+        max: 1.0
+      - name: "tempo"
+        dtype: "float"
+        required: true
+        min: 0.0 # Tempo usually positive
+        # max: 250.0 # Example max
+      - name: "duration_ms"
+        dtype: "float" # Often int, but float is fine
+        required: true
+        min: 0.0 # Duration usually positive
+        # max: 3600000 # Example 1 hour
+
 data_split: # Configuration for train/test split in model.py
   test_size: 0.2 # Proportion of the (post-holdout) data to use for the test set
   valid_size: 0.2 # Note: valid_size is defined but not actively used by current model.py's train_test_split
@@ -140,97 +238,3 @@ artifacts:
   # Specific filenames for outputs of features.py, used by model.py and inferencer.py
   engineered_features_filename: "features.csv" 
   feature_list_filename: "feature_list.txt" # Output by features.py
-
-data_validation: # Configuration for data validation (if a data_validator.py script is used)
-  enabled: true
-  action_on_error: "raise"  # Options: "raise" or "warn" on validation failure
-  report_path: "logs/validation_report.json" 
-  schema: # Expected schema for the raw data (raw_path)
-    columns:
-      - name: "year"
-        dtype: "int"
-        required: true
-        min: 2000
-        max: 2025
-      - name: "track_name"
-        dtype: "str"
-        required: true
-      - name: "track_popularity" # Target variable
-        dtype: "int"
-        required: true
-        min: 0
-        max: 100
-      - name: "album"
-        dtype: "str"
-        required: true
-      - name: "artist_name"
-        dtype: "str"
-        required: true
-      - name: "artist_genres" 
-        dtype: "str"      
-        required: true
-      - name: "artist_popularity"
-        dtype: "int"
-        required: true
-        min: 0
-        max: 100
-      - name: "danceability"
-        dtype: "float"
-        required: true # Assuming required for scaling
-        min: 0.0 
-        max: 1.0
-      - name: "energy"
-        dtype: "float"
-        required: true # Assuming required for scaling
-        min: 0.0 
-        max: 1.0
-      - name: "key"
-        dtype: "float" # Often int (0-11), but float if scaled
-        required: true
-        min: 0.0
-        max: 11.0
-      - name: "loudness"
-        dtype: "float"
-        required: true
-        min: -60.0 # Adjusted typical min
-        max: 5.0   # Adjusted typical max for dBFS
-      - name: "mode" # Binary (0 or 1)
-        dtype: "float" 
-        required: true
-        min: 0.0
-        max: 1.0
-      - name: "speechiness"
-        dtype: "float"
-        required: true
-        min: 0.0
-        max: 1.0
-      - name: "acousticness"
-        dtype: "float"
-        required: true
-        min: 0.0
-        max: 1.0
-      - name: "instrumentalness" # Will be dropped by preprocessing.drop_columns
-        dtype: "float"
-        required: true # Or false if sometimes missing before drop
-        min: 0.0
-        max: 1.0
-      - name: "liveness"
-        dtype: "float"
-        required: true
-        min: 0.0
-        max: 1.0
-      - name: "valence"
-        dtype: "float"
-        required: true
-        min: 0.0
-        max: 1.0
-      - name: "tempo"
-        dtype: "float"
-        required: true
-        min: 0.0 # Tempo usually positive
-        # max: 250.0 # Example max
-      - name: "duration_ms"
-        dtype: "float" # Often int, but float is fine
-        required: true
-        min: 0.0 # Duration usually positive
-        # max: 3600000 # Example 1 hour

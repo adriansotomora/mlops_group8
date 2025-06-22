@@ -1,5 +1,4 @@
-# MLproject (root of repo)
-name: mlops_group8_spotify
+name: mlops_group8
 
 entry_points:
 
@@ -12,7 +11,7 @@ entry_points:
           Comma-separated list of pipeline steps
           (e.g., "preprocess,features,model")
     command: >
-      python src/main.py main.steps={steps}
+      python main.py main.steps={steps}
 
   main_with_override:
     parameters:
@@ -24,4 +23,4 @@ entry_points:
         default: ""
         description: Extra overrides in standard Hydra syntax
     command: >
-      python src/main.py main.steps={steps} {hydra_options}
+      python main.py main.steps={steps} {hydra_options}
