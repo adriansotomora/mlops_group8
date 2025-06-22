@@ -1,0 +1,17 @@
+name: model
+
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10.17
+  - pandas
+  - scikit-learn
+  - hydra-core
+  - omegaconf
+  - python-dotenv
+  - pyyaml
+  - statsmodels
+  - pip
+  - pip:
+      - mlflow-skinny
+      - wandb
