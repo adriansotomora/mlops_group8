@@ -27,6 +27,12 @@ import yaml
 from typing import Dict, Any, List, Optional
 import joblib 
 
+# Add src to path to allow for absolute imports
+from pathlib import Path
+# Add the project root to the Python path
+project_root = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(project_root))
+
 # Import paths (ensure these match your project structure)
 try:
     from src.preprocess.preprocessing import drop_columns as preprocess_drop_columns
@@ -90,7 +96,9 @@ def _load_json(path: str, label: str) -> Any:
 def run_inference(input_csv_path: str, config_path: str, output_csv_path: str) -> None:
     """Run batch inference on input data using trained model."""
     try:
-        with open(config_path, "r") as f:
+        config_abs_path = os.path.abspath(config_path)
+        config_dir = os.path.dirname(config_abs_path)
+        with open(config_abs_path, "r") as f:
             config = yaml.safe_load(f)
     except FileNotFoundError:
         print(f"CRITICAL ERROR: Config file '{config_path}' not found.")
@@ -100,28 +108,40 @@ def run_inference(input_csv_path: str, config_path: str, output_csv_path: str) -
         sys.exit(1)
 
     log_cfg = config.get("logging", {})
+    log_file_rel = log_cfg.get("log_file", "logs/inference.log")
+    log_file_abs = os.path.join(config_dir, log_file_rel)
     _setup_logging(
         log_level_str=log_cfg.get("level", "INFO"),
-        log_file=log_cfg.get("log_file", "logs/inference.log"),
+        log_file=log_file_abs,
         log_format=log_cfg.get("format"),
         date_format=log_cfg.get("datefmt")
     )
     logger.info("Starting batch inference process...")
-    logger.info(f"Using configuration from: {config_path}")
+    logger.info(f"Using configuration from: {config_abs_path}")
+
+    # Resolve input and output paths relative to the config directory
+    input_csv_abs_path = os.path.join(config_dir, input_csv_path)
+    output_csv_abs_path = os.path.join(config_dir, output_csv_path)
 
     art_cfg = config.get("artifacts", {})
     model_cfg = config.get("model", {})
     active_model_type = model_cfg.get("active", "linear_regression") 
 
-    scaler_path = art_cfg.get("preprocessing_pipeline")
-    model_save_path = model_cfg.get(active_model_type, {}).get("save_path")
+    scaler_path_rel = art_cfg.get("preprocessing_pipeline")
+    model_save_path_rel = model_cfg.get(active_model_type, {}).get("save_path")
+    selected_features_json_path_rel = model_cfg.get(active_model_type, {}).get("selected_features_path")
+
+    # Resolve paths relative to the config file directory
+    scaler_path = os.path.join(config_dir, scaler_path_rel) if scaler_path_rel else None
+    model_save_path = os.path.join(config_dir, model_save_path_rel) if model_save_path_rel else None
     
-    selected_features_json_path = model_cfg.get(active_model_type, {}).get("selected_features_path")
-    if not selected_features_json_path and model_save_path: 
+    if selected_features_json_path_rel:
+        selected_features_json_path = os.path.join(config_dir, selected_features_json_path_rel)
+    elif model_save_path: 
         base, _ = os.path.splitext(model_save_path)
         selected_features_json_path = f"{base}_selected_features.json"
         logger.info(f"No explicit 'selected_features_path' in config. Using derived: {selected_features_json_path}")
-    elif not model_save_path and not selected_features_json_path:
+    else:
          logger.critical("Cannot determine selected features path.")
          return
 
@@ -144,10 +164,10 @@ def run_inference(input_csv_path: str, config_path: str, output_csv_path: str) -
         logger.critical(f"Error loading artifacts: {e}") 
         return
 
-    logger.info(f"Loading new input data from: {input_csv_path}")
+    logger.info(f"Loading new input data from: {input_csv_abs_path}")
     try:
         new_data_df = pd.read_csv(
-            input_csv_path,
+            input_csv_abs_path,
             delimiter=config.get("data_source", {}).get("delimiter", ","),
             header=config.get("data_source", {}).get("header", 0),
             encoding=config.get("data_source", {}).get("encoding", "utf-8")
@@ -155,10 +175,10 @@ def run_inference(input_csv_path: str, config_path: str, output_csv_path: str) -
         original_data_for_output = new_data_df.copy() 
         logger.info(f"New data loaded. Shape: {new_data_df.shape}")
     except FileNotFoundError:
-        logger.critical(f"Input data file not found at '{input_csv_path}'.")
+        logger.critical(f"Input data file not found at \'{input_csv_abs_path}\'.")
         return
     except Exception as e:
-        logger.critical(f"Error loading input data from '{input_csv_path}': {e}")
+        logger.critical(f"Error loading input data from \'{input_csv_abs_path}\': {e}")
         return
 
     current_df = new_data_df.copy()
@@ -271,16 +291,16 @@ def run_inference(input_csv_path: str, config_path: str, output_csv_path: str) -
                        "transformations if input data had issues, or if indices didn't align perfectly.")
 
 
-    logger.info(f"Writing predictions to: {output_csv_path}")
-    output_dir = os.path.dirname(output_csv_path)
+    logger.info(f"Writing predictions to: {output_csv_abs_path}")
+    output_dir = os.path.dirname(output_csv_abs_path)
     if output_dir and not os.path.exists(output_dir): 
         os.makedirs(output_dir, exist_ok=True)
     
     try:
-        output_df_to_save.to_csv(output_csv_path, index=False)
+        output_df_to_save.to_csv(output_csv_abs_path, index=False)
         logger.info("Inference complete. Predictions and intervals saved.")
     except Exception as e:
-        logger.critical(f"Error saving predictions to '{output_csv_path}': {e}")
+        logger.critical(f"Error saving predictions to \'{output_csv_abs_path}\': {e}")
 
 def main_cli():
     """Run CLI entry point for batch inference."""

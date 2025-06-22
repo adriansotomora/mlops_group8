@@ -54,47 +54,66 @@ def get_raw_data(config_path: str = "config.yaml") -> pd.DataFrame:
     """
     try:
         config = load_config(config_path)
-    except FileNotFoundError: # Handled by load_config
-        raise 
-    except yaml.YAMLError as e: # Specific error for YAML parsing
-        logger.error(f"Error parsing YAML configuration from '{config_path}': {e}", exc_info=True)
-        raise ValueError(f"Error parsing YAML configuration from '{config_path}'.") from e
+    except FileNotFoundError:  # Handled by load_config
+        raise
+    except yaml.YAMLError as e:  # Specific error for YAML parsing
+        logger.error(
+            f"Error parsing YAML configuration from '{config_path}': {e}",
+            exc_info=True,
+        )
+        raise ValueError(
+            f"Error parsing YAML configuration from '{config_path}'."
+        ) from e
 
     data_cfg = config.get("data_source", {})
-    
+
     file_type = data_cfg.get("type", "csv").lower()
     if file_type != "csv":
-        logger.error(f"Unsupported file type in config: '{file_type}'. Only 'csv' supported.")
-        raise ValueError(f"Unsupported file type: '{file_type}'. This loader only supports 'csv'.")
+        logger.error(
+            f"Unsupported file type in config: '{file_type}'. Only 'csv' supported."
+        )
+        raise ValueError(
+            f"Unsupported file type: '{file_type}'. "
+            "This loader only supports 'csv'."
+        )
 
     raw_data_path = data_cfg.get("raw_path")
     if not raw_data_path or not isinstance(raw_data_path, str):
         logger.error("Config missing 'data_source.raw_path'.")
         raise ValueError("Config must specify 'data_source.raw_path' for raw data.")
 
-    logger.info(f"Attempting to load raw data from: {raw_data_path}")
-    
+    # Resolve the raw_data_path relative to the config file's location.
+    config_dir = os.path.dirname(os.path.abspath(config_path))
+    absolute_raw_data_path = os.path.join(config_dir, raw_data_path)
+
+    logger.info(f"Attempting to load raw data from: {absolute_raw_data_path}")
+
     df = _read_csv_data(
-        path=raw_data_path,
+        path=absolute_raw_data_path,
         delimiter=data_cfg.get("delimiter", ","),
         header=data_cfg.get("header", 0),
         encoding=data_cfg.get("encoding", "utf-8"),
     )
     return df
 
+
 if __name__ == "__main__":
     # Basic logging setup for standalone execution.
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(levelname)s - %(name)s - %(module)s - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S"
+        datefmt="%Y-%m-%d %H:%M:%S",
     )
     logger.info("Running data_loader.py standalone...")
-    
+
     try:
         # Assumes config.yaml is in the current working directory when run standalone.
-        raw_df = get_raw_data() 
-        logger.info(f"Raw data loaded successfully via __main__. Shape: {raw_df.shape}")
-        logger.info("First 5 rows of loaded data:\n%s", raw_df.head().to_string())
-    except Exception as e: 
+        raw_df = get_raw_data()
+        logger.info(
+            "Raw data loaded successfully via __main__. Shape: %s", raw_df.shape
+        )
+        logger.info(
+            "First 5 rows of loaded data:\n%s", raw_df.head().to_string()
+        )
+    except Exception as e:
         logger.error(f"__main__: Failed to load data: {e}", exc_info=True)

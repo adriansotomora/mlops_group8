@@ -211,87 +211,150 @@ def log_feature_list(df_features: pd.DataFrame, path: str, logger_param: logging
     except Exception as e:
         logger_param.error(f"Error saving feature list to {path}: {e}")
 
+
 def main_features(config_path: str = "config.yaml"):
-    """Execute feature engineering stage. Load preprocessed data and apply transformations."""
+    """
+    Execute feature engineering stage. Load preprocessed data, apply
+    transformations, and save the results.
+    """
     try:
         config = load_config(config_path)
     except Exception as e:
-        logging.basicConfig(level=logging.ERROR, format="%(levelname)s: %(message)s") # Fallback logger
-        logging.critical(f"Features Stage: Failed to load config '{config_path}': {e}", exc_info=True)
+        # Fallback logger
+        logging.basicConfig(
+            level=logging.ERROR, format="%(levelname)s: %(message)s"
+        )
+        logging.critical(
+            f"Features Stage: Failed to load config '{config_path}': {e}",
+            exc_info=True
+        )
         return
 
-    global logger # Rebind module-level logger with specific config
-    logger = get_logger(config.get("logging", {}), default_log_file="logs/features.log")
-    logger.info(f"--- Starting Feature Engineering Stage (config: {config_path}) ---")
+    global logger  # Rebind module-level logger with specific config
+    logger = get_logger(
+        config.get("logging", {}), default_log_file="logs/features.log"
+    )
+    logger.info(
+        f"--- Starting Feature Engineering Stage (config: {config_path}) ---"
+    )
+
+    # --- Path Resolution ---
+    config_dir = os.path.dirname(os.path.abspath(config_path))
 
     # Load input data (output of preprocessing.py)
     data_source_cfg = config.get("data_source", {})
-    processed_input_path = data_source_cfg.get("processed_path")
-    if not processed_input_path:
-        logger.critical("Config missing 'data_source.processed_path'. Cannot load input data.")
+    processed_input_path_relative = data_source_cfg.get("processed_path")
+    if not processed_input_path_relative:
+        logger.critical(
+            "Config missing 'data_source.processed_path'. "
+            "Cannot load input data."
+        )
         return
-    
-    logger.info(f"Loading preprocessed data from: {processed_input_path}")
+
+    processed_input_path_absolute = os.path.join(
+        config_dir, processed_input_path_relative
+    )
+    logger.info(
+        f"Loading preprocessed data from: {processed_input_path_absolute}"
+    )
     try:
-        df_input = pd.read_csv(processed_input_path)
+        df_input = pd.read_csv(processed_input_path_absolute)
         logger.info(f"Preprocessed data loaded. Shape: {df_input.shape}")
     except FileNotFoundError:
-        logger.critical(f"Input file not found: '{processed_input_path}'. Ensure preprocessing ran.")
+        logger.critical(
+            f"Input file not found: '{processed_input_path_absolute}'. "
+            "Ensure preprocessing ran."
+        )
         return
     except Exception as e:
-        logger.critical(f"Error loading data from '{processed_input_path}': {e}", exc_info=True)
+        logger.critical(
+            f"Error loading data from '{processed_input_path_absolute}': {e}",
+            exc_info=True
+        )
         return
     if df_input.empty:
-        logger.critical("Loaded preprocessed data is empty. Aborting feature engineering.")
+        logger.critical(
+            "Loaded preprocessed data is empty. Aborting feature engineering."
+        )
         return
 
     # --- Apply Feature Engineering Steps ---
     df_feat = df_input.copy()
     df_feat = parse_genres(df_feat, config, logger)
-    df_feat = drop_irrelevant_columns(df_feat, config, logger) # Uses features.drop from config
+    # Uses features.drop from config
+    df_feat = drop_irrelevant_columns(df_feat, config, logger)
     df_feat = create_polynomial_features(df_feat, config, logger)
-    selected_features_df = select_features(df_feat, config, logger) # Selects final numeric features
+    # Selects final numeric features
+    selected_features_df = select_features(df_feat, config, logger)
 
     # --- Save Outputs ---
     artifacts_cfg = config.get("artifacts", {})
-    processed_dir = artifacts_cfg.get("processed_dir", "data/processed") # Default output dir
+    # Default output dir
+    processed_dir_relative = artifacts_cfg.get(
+        "processed_dir", "data/processed"
+    )
+    processed_dir_absolute = os.path.join(config_dir, processed_dir_relative)
 
     # Save list of final feature names
-    feature_list_filename = artifacts_cfg.get("feature_list_filename", "feature_list.txt")
-    feature_list_output_path = os.path.join(processed_dir, feature_list_filename)
+    feature_list_filename = artifacts_cfg.get(
+        "feature_list_filename", "feature_list.txt"
+    )
+    feature_list_output_path = os.path.join(
+        processed_dir_absolute, feature_list_filename
+    )
     log_feature_list(selected_features_df, feature_list_output_path, logger)
-    
-    # Save the DataFrame with all engineered features (before final selection for modeling)
-    # This is often useful for EDA or if different models use different subsets.
-    # However, the current select_features already filters. If you want all engineered features,
-    # save df_feat before select_features, or adjust select_features.
-    # For now, saving the 'selected_features_df' which is ready for modeling.
-    engineered_features_filename = artifacts_cfg.get("engineered_features_filename", "features.csv")
-    engineered_features_output_path = os.path.join(processed_dir, engineered_features_filename)
+
+    # Save the DataFrame with all engineered features.
+    engineered_features_filename = artifacts_cfg.get(
+        "engineered_features_filename", "features.csv"
+    )
+    engineered_features_output_path = os.path.join(
+        processed_dir_absolute, engineered_features_filename
+    )
     try:
-        selected_features_df.to_csv(engineered_features_output_path, index=False)
-        logger.info(f"Engineered features DataFrame saved to {engineered_features_output_path} | Shape: {selected_features_df.shape}")
+        # Ensure the output directory exists
+        os.makedirs(processed_dir_absolute, exist_ok=True)
+        selected_features_df.to_csv(
+            engineered_features_output_path, index=False
+        )
+        logger.info(
+            "Engineered features DataFrame saved to "
+            f"{engineered_features_output_path} | "
+            f"Shape: {selected_features_df.shape}"
+        )
     except Exception as e:
-        logger.error(f"Error saving engineered features to {engineered_features_output_path}: {e}", exc_info=True)
-        
+        logger.error(
+            "Error saving engineered features to "
+            f"{engineered_features_output_path}: {e}",
+            exc_info=True
+        )
+
     logger.info("--- Feature Engineering Stage Completed ---")
-    # This function doesn't need to return the DataFrame if main.py orchestrates file I/O
-    # return selected_features_df 
 
 
 if __name__ == "__main__":
-    # This allows running features.py directly, assuming preprocessing.py has already run
-    # and its output (e.g., data/processed/Songs_2025_processed.csv) exists.
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(name)s - %(message)s")
+    # This allows running features.py directly, assuming preprocessing.py has
+    # already run and its output
+    # (e.g., data/processed/Songs_2025_processed.csv) exists.
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(name)s - %(message)s"
+    )
     logger.info("Running features.py as a standalone script...")
-    
+
     # Default config path, can be overridden by an orchestrator if needed
-    CONFIG_PATH = "config.yaml" 
+    CONFIG_PATH = "config.yaml"
     if not os.path.exists(CONFIG_PATH):
-        logger.critical(f"Configuration file '{CONFIG_PATH}' not found. Cannot run features.py standalone.")
+        logger.critical(
+            f"Configuration file '{CONFIG_PATH}' not found. "
+            "Cannot run features.py standalone."
+        )
     else:
         try:
             main_features(config_path=CONFIG_PATH)
         except Exception as e:
-            logger.critical(f"Error during standalone execution of features.py: {e}", exc_info=True)
+            logger.critical(
+                f"Error during standalone execution of features.py: {e}",
+                exc_info=True
+            )
 

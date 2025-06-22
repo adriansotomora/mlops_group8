@@ -18,6 +18,13 @@ import yaml
 # MSE and R2 are calculated by the evaluator, but sklearn.model_selection is still used
 from sklearn.model_selection import train_test_split
 
+# Add src to path to allow for absolute imports
+import sys
+from pathlib import Path
+# Add the project root to the Python path
+project_root = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(project_root))
+
 # Assuming evaluator_regression.py is in src/evaluation/
 # Adjust the import path if your evaluator_regression.py is located elsewhere.
 from src.evaluation.evaluator import evaluate_statsmodels_model 
@@ -25,9 +32,10 @@ from src.evaluation.evaluator import evaluate_statsmodels_model
 # Module-level logger - will be initialized by main_modeling
 logger = logging.getLogger(__name__)
 
-def get_logger(logging_config: Dict[str, Any]) -> logging.Logger:
+def get_logger(logging_config: Dict[str, Any], config_dir: str) -> logging.Logger:
     """Set up and return a logger based on the provided configuration."""
-    log_file = logging_config.get("log_file", "logs/modeling.log") 
+    log_file_rel = logging_config.get("log_file", "logs/modeling.log") 
+    log_file = os.path.join(config_dir, log_file_rel)
     log_dir = os.path.dirname(log_file)
     if log_dir and not os.path.exists(log_dir):
         os.makedirs(log_dir, exist_ok=True)
@@ -217,14 +225,16 @@ def save_model_artifacts(
     model: Any,
     selected_features: List[str],
     metrics: Dict[str, float], # These are raw metrics from the evaluator
-    config: Dict[str, Any]
+    config: Dict[str, Any],
+    config_dir: str
 ) -> None:
     """Save the trained model, selected features, and evaluation metrics based on config."""
     model_cfg = config["model"]
     art_cfg = config["artifacts"]
     active_model_type = model_cfg["active"] 
     
-    model_save_path = model_cfg[active_model_type]["save_path"]
+    model_save_path_rel = model_cfg[active_model_type]["save_path"]
+    model_save_path = os.path.join(config_dir, model_save_path_rel)
     model_dir = os.path.dirname(model_save_path)
     if model_dir and not os.path.exists(model_dir):
         os.makedirs(model_dir, exist_ok=True)
@@ -234,7 +244,8 @@ def save_model_artifacts(
 
     selected_features_path_key = model_cfg[active_model_type].get("selected_features_path")
     if selected_features_path_key:
-         features_path = selected_features_path_key
+         features_path_rel = selected_features_path_key
+         features_path = os.path.join(config_dir, features_path_rel)
     else: 
         base, ext = os.path.splitext(model_save_path)
         features_path = f"{base}_selected_features.json"
@@ -247,7 +258,8 @@ def save_model_artifacts(
         json.dump({"selected_features": selected_features, "count": len(selected_features)}, f, indent=4)
     logger.info(f"Selected features list saved to: {features_path}")
 
-    metrics_save_path = art_cfg["metrics_path"]
+    metrics_save_path_rel = art_cfg["metrics_path"]
+    metrics_save_path = os.path.join(config_dir, metrics_save_path_rel)
     metrics_dir = os.path.dirname(metrics_save_path)
     if metrics_dir and not os.path.exists(metrics_dir):
         os.makedirs(metrics_dir, exist_ok=True)
@@ -265,7 +277,9 @@ def save_model_artifacts(
 def main_modeling(config_path: str = "config.yaml") -> None:
     """Run the modeling pipeline."""
     try:
-        config = load_config(config_path)
+        config_abs_path = os.path.abspath(config_path)
+        config_dir = os.path.dirname(config_abs_path)
+        config = load_config(config_abs_path)
     except FileNotFoundError:
         logging.critical(f"CRITICAL: Configuration file '{config_path}' not found. Modeling cannot start.")
         return
@@ -274,7 +288,7 @@ def main_modeling(config_path: str = "config.yaml") -> None:
         return
 
     global logger 
-    logger = get_logger(config.get("logging", {}))
+    logger = get_logger(config.get("logging", {}), config_dir)
     
     try:
         validate_modeling_config(config)
@@ -289,7 +303,7 @@ def main_modeling(config_path: str = "config.yaml") -> None:
     data_source_cfg = config["data_source"]
 
     features_file_name = art_cfg.get("engineered_features_filename", "features.csv")
-    features_input_path = os.path.join(art_cfg["processed_dir"], features_file_name)
+    features_input_path = os.path.join(config_dir, art_cfg["processed_dir"], features_file_name)
     logger.info(f"Loading features (X) from: {features_input_path}")
     try:
         X_df = pd.read_csv(features_input_path)
@@ -301,7 +315,8 @@ def main_modeling(config_path: str = "config.yaml") -> None:
         return
     logger.info(f"Features (X) loaded. Shape: {X_df.shape}")
 
-    target_data_path = data_source_cfg["processed_path"]
+    target_data_path_rel = data_source_cfg["processed_path"]
+    target_data_path = os.path.join(config_dir, target_data_path_rel)
     logger.info(f"Loading data for target variable '{target_column_name}' from: {target_data_path}")
     try:
         target_df = pd.read_csv(target_data_path)
@@ -382,7 +397,7 @@ def main_modeling(config_path: str = "config.yaml") -> None:
         # Decide if to proceed with saving NaN metrics or exit
     
     logger.info("Saving model artifacts...")
-    save_model_artifacts(trained_model, final_selected_features, evaluation_metrics, config)
+    save_model_artifacts(trained_model, final_selected_features, evaluation_metrics, config, config_dir)
     
     logger.info(f"Modeling pipeline for '{active_model_type}' completed successfully.")
     # Log final raw metrics that were saved
