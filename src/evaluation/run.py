@@ -1,6 +1,10 @@
 import wandb
 import os
 from datetime import datetime
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+from src.evaluation.evaluator import evaluate_statsmodels_model
 
 def main():
     run_name = f"evaluation_{datetime.now():%Y%m%d_%H%M%S}"

@@ -1,6 +1,10 @@
 import wandb
 import os
 from datetime import datetime
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+from src.inference.inferencer import run_inference
 
 def main():
     run_name = f"inference_{datetime.now():%Y%m%d_%H%M%S}"
@@ -12,6 +16,7 @@ def main():
     )
     
     try:
+        run_inference(config_path="../../config.yaml")
         wandb.log({"inference_status": "completed"})
     except Exception as e:
         wandb.log({"inference_status": "failed", "error": str(e)})
