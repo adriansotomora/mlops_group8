@@ -1,8 +1,14 @@
 # This file is used to set up the parameters for data loading, logging, and other settings.
 
+main:
+  WANDB_PROJECT: mlops_group8
+  WANDB_ENTITY: manuelbonnelly-ie-university
+  steps: all
+  hydra_options: ""
+
 data_source:
   raw_path: "data/raw/Songs_2025.csv" # Path to the original raw data file
-  processed_path: "./data/processed/Songs_2025_processed.csv" # Path for saving/loading the main preprocessed dataset (after holdout split)
+  processed_path: "data/processed/Songs_2025_processed.csv" # Path for saving/loading the main preprocessed dataset (after holdout split)
   type: "csv"                      # Data file type for raw_path
   delimiter: ","                   # CSV delimiter for raw_path
   header: 0                        # Header row index for raw_path
@@ -14,7 +20,7 @@ data_source:
 
 logging:
   level: "INFO"                         # Logging level: DEBUG, INFO, WARNING, ERROR, CRITICAL
-  log_file: "./logs/pipeline_main.log"  # Main log file for the pipeline runs
+  log_file: "logs/pipeline_main.log"  # Main log file for the pipeline runs
   format: "%(asctime)s - %(levelname)s - %(name)s - %(module)s - %(message)s" # Detailed log format
   datefmt: "%Y-%m-%d %H:%M:%S"          # Timestamp format for logs
 
@@ -27,17 +33,17 @@ model:
   active: linear_regression  # Specifies which model configuration to use from below
 
   logistic_regression: 
-    save_path: models/logistic_regression.pkl
-    selected_features_path: models/logistic_regression_selected_features.json # Path to save selected features for this model
+    save_path: "models/logistic_regression.pkl"
+    selected_features_path: "models/logistic_regression_selected_features.json" # Path to save selected features for this model
     params: {} 
 
   knn: 
-    save_path: models/knn.pkl
-    selected_features_path: models/knn_selected_features.json
+    save_path: "models/knn.pkl"
+    selected_features_path: "models/knn_selected_features.json"
     params: {}
 
   kmeans: 
-    save_path: models/kmeans.pkl
+    save_path: "models/kmeans.pkl"
     # No selected_features_path needed for unsupervised KMeans
     k_min: 1
     k_max: 10
@@ -45,8 +51,8 @@ model:
     random_state: 42
 
   linear_regression:
-    save_path: models/linear_regression.pkl 
-    selected_features_path: models/linear_regression_selected_features.json # Explicit path for clarity
+    save_path: "models/linear_regression.pkl" 
+    selected_features_path: "models/linear_regression_selected_features.json" # Explicit path for clarity
     stepwise:
       enabled: true # Explicitly enable/disable stepwise selection
       threshold_in: 0.05 # p-value to enter

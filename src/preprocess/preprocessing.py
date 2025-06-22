@@ -210,20 +210,23 @@ def save_data_and_artifact(df: pd.DataFrame, data_path: str, artifact: Optional[
 def main_preprocessing(config_path: str = "config.yaml") -> None:
     """Run the data preprocessing pipeline, including holdout split."""
     try:
-        config = load_config(config_path) 
-    except Exception as e: 
+        config = load_config(config_path)
+    except Exception as e:
         logging.basicConfig(level=logging.ERROR, format="%(levelname)s: %(message)s")
-        logging.critical(f"Preprocessing: Failed to load config '{config_path}': {e}", exc_info=True) 
+        logging.critical(f"Preprocessing: Failed to load config '{config_path}': {e}", exc_info=True)
         return
 
-    global logger 
+    global logger
     logger = get_logger(config.get("logging", {}), default_log_file="logs/preprocessing.log")
-    
+
     try:
         validate_preprocessing_config(config, logger_param=logger)
     except KeyError as e:
         logger.critical(f"Config validation failed: {e}. Exiting preprocessing.", exc_info=True)
         return
+
+    # --- Path Resolution ---
+    config_dir = os.path.dirname(os.path.abspath(config_path))
 
     data_source_cfg = config.get("data_source", {})
     pre_cfg = config.get("preprocessing", {})
@@ -232,81 +235,85 @@ def main_preprocessing(config_path: str = "config.yaml") -> None:
     # --- Load full raw dataset USING data_loader.py ---
     logger.info(f"Attempting to load full raw data using data_loader from config: {config_path}")
     try:
-        # data_loader.get_raw_data uses config_path to load its own config and get raw_path
-        full_raw_df = get_raw_data(config_path=config_path) 
-        if full_raw_df is None or full_raw_df.empty: # get_raw_data raises errors, but defensive check
+        full_raw_df = get_raw_data(config_path=config_path)
+        if full_raw_df is None or full_raw_df.empty:
             logger.critical("Data loading via get_raw_data returned empty or None. Exiting.")
             return
         logger.info(f"Full raw data loaded via data_loader. Shape: {full_raw_df.shape}")
-    except FileNotFoundError as e: 
+    except FileNotFoundError as e:
         logger.critical(f"Failed to load raw data (FileNotFound via data_loader): {e}. Exiting.", exc_info=True)
         return
-    except ValueError as e: 
+    except ValueError as e:
         logger.critical(f"Failed to load raw data (ValueError via data_loader): {e}. Exiting.", exc_info=True)
         return
-    except Exception as e: 
+    except Exception as e:
         logger.critical(f"Unexpected error during data loading via data_loader: {e}. Exiting.", exc_info=True)
         return
-    # --- End of data loading modification ---
 
-    df_for_pipeline = full_raw_df 
-    holdout_path = data_source_cfg.get("inference_holdout_path")
+    df_for_pipeline = full_raw_df
+    holdout_path_relative = data_source_cfg.get("inference_holdout_path")
     holdout_size = data_source_cfg.get("inference_holdout_size")
-    split_random_state = config.get("data_split", {}).get("random_state", 42) 
+    split_random_state = config.get("data_split", {}).get("random_state", 42)
 
-    if holdout_path and isinstance(holdout_size, float) and 0 < holdout_size < 1:
+    if holdout_path_relative and isinstance(holdout_size, float) and 0 < holdout_size < 1:
         logger.info(f"Splitting {holdout_size*100:.1f}% of raw data for inference holdout.")
         try:
             df_for_pipeline, df_holdout = train_test_split(
                 full_raw_df, test_size=holdout_size, random_state=split_random_state
             )
             if not df_holdout.empty:
-                 holdout_dir = os.path.dirname(holdout_path)
-                 if holdout_dir and not os.path.exists(holdout_dir): os.makedirs(holdout_dir, exist_ok=True)
-                 df_holdout.to_csv(holdout_path, index=False)
-                 logger.info(f"Inference holdout data saved to: {holdout_path} | Shape: {df_holdout.shape}")
-                 logger.info(f"Proceeding with main pipeline data. Shape: {df_for_pipeline.shape}")
-            else: 
-                 logger.warning("Holdout DataFrame is empty after split. Using full dataset.")
-                 df_for_pipeline = full_raw_df 
+                holdout_path_absolute = os.path.join(config_dir, holdout_path_relative)
+                holdout_dir = os.path.dirname(holdout_path_absolute)
+                if holdout_dir and not os.path.exists(holdout_dir):
+                    os.makedirs(holdout_dir, exist_ok=True)
+                df_holdout.to_csv(holdout_path_absolute, index=False)
+                logger.info(f"Inference holdout data saved to: {holdout_path_absolute} | Shape: {df_holdout.shape}")
+                logger.info(f"Proceeding with main pipeline data. Shape: {df_for_pipeline.shape}")
+            else:
+                logger.warning("Holdout DataFrame is empty after split. Using full dataset.")
+                df_for_pipeline = full_raw_df
         except Exception as e:
             logger.error(f"Failed to split/save raw data for holdout: {e}. Using full dataset.", exc_info=True)
-            df_for_pipeline = full_raw_df 
+            df_for_pipeline = full_raw_df
     else:
         logger.info("Inference holdout not configured or invalid. Using full raw dataset.")
 
     if df_for_pipeline.empty:
         logger.critical("Data for pipeline is empty after holdout split. Exiting.")
         return
-        
+
     current_df = df_for_pipeline.copy()
-    
+
     logger.info("Data validation (placeholder step)...")
     logger.info("Data validation (placeholder step) complete.")
-    
+
     current_df = drop_columns(current_df, pre_cfg.get("drop_columns", []))
     if pre_cfg.get("outlier_removal", {}).get("enabled", False):
         current_df = remove_outliers_iqr(
-            current_df, 
-            pre_cfg["outlier_removal"].get("features", []), 
+            current_df,
+            pre_cfg["outlier_removal"].get("features", []),
             pre_cfg["outlier_removal"].get("iqr_multiplier", 1.5)
         )
-    
+
     scaler_artifact = None
     if pre_cfg.get("scale", {}).get("columns"):
         current_df, scaler_artifact = scale_columns(
-            current_df, 
-            pre_cfg["scale"].get("columns", []), 
+            current_df,
+            pre_cfg["scale"].get("columns", []),
             pre_cfg["scale"].get("method", "minmax")
         )
 
-    processed_output_path = data_source_cfg.get("processed_path") 
-    scaler_artifact_path = art_cfg.get("preprocessing_pipeline")
-    if not processed_output_path:
+    processed_output_path_relative = data_source_cfg.get("processed_path")
+    scaler_artifact_path_relative = art_cfg.get("preprocessing_pipeline")
+    if not processed_output_path_relative:
         logger.error("Config missing 'data_source.processed_path'. Cannot save processed data.")
     else:
-        save_data_and_artifact(current_df, processed_output_path, scaler_artifact, scaler_artifact_path)
-    
+        processed_output_path_absolute = os.path.join(config_dir, processed_output_path_relative)
+        scaler_artifact_path_absolute = None
+        if scaler_artifact_path_relative:
+            scaler_artifact_path_absolute = os.path.join(config_dir, scaler_artifact_path_relative)
+        save_data_and_artifact(current_df, processed_output_path_absolute, scaler_artifact, scaler_artifact_path_absolute)
+
     logger.info("--- Preprocessing Stage Completed ---")
 
 

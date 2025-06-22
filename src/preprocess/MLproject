@@ -1,0 +1,5 @@
+name: preprocess
+
+entry_points:
+  main:
+    command: python run.py
