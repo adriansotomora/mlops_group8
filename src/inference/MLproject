@@ -1,0 +1,6 @@
+name: inference
+conda_env: ../../environment.yml
+
+entry_points:
+  main:
+    command: python run.py

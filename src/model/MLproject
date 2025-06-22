@@ -1,0 +1,10 @@
+name: model
+conda_env: ../../environment.yml
+
+entry_points:
+  main:
+    parameters:
+      hydra_options:
+        type: str
+        default: ""
+    command: python run.py
