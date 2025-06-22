@@ -1,7 +1,10 @@
 import wandb
 import os
 from datetime import datetime
-from .features import main_features
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+from src.features.features import main_features
 
 def main():
     run_name = f"features_{datetime.now():%Y%m%d_%H%M%S}"

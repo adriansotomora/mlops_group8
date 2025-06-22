@@ -62,7 +62,7 @@ def main(cfg: DictConfig):
                 params["hydra_options"] = hydra_override
 
             print(f"Running step: {step} (W&B run: {run.name})")
-            mlflow.run(step_dir, "main", parameters=params)
+            mlflow.run(step_dir, "main", parameters=params, env_manager="local")
 
     wandb.finish()
 

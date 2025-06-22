@@ -1,7 +1,10 @@
 import wandb
 import os
 from datetime import datetime
-from .preprocessing import main_preprocessing
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+from src.preprocess.preprocessing import main_preprocessing
 
 def main():
     run_name = f"preprocess_{datetime.now():%Y%m%d_%H%M%S}"

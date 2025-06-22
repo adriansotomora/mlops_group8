@@ -2,7 +2,10 @@ import wandb
 import os
 import json
 from datetime import datetime
-from .model import main_modeling
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+from src.model.model import main_modeling
 
 def main():
     run_name = f"model_{datetime.now():%Y%m%d_%H%M%S}"
