@@ -1,0 +1,22 @@
+stages:
+  preprocess:
+    cmd: python src/preprocess/run.py
+    deps:
+    - data/raw
+    - src/preprocess/run.py
+    outs:
+    - data/processed
+  train:
+    cmd: python src/model/run.py
+    deps:
+    - data/processed
+    - src/model/run.py
+    outs:
+    - models/model.pkl
+  evaluate:
+    cmd: python src/evaluation/run.py
+    deps:
+    - models/model.pkl
+    - src/evaluation/run.py
+    outs:
+    - metrics.json
