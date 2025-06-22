@@ -4,7 +4,7 @@ import numpy as np
 import yaml
 import joblib
 import pytest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 import logging
 from pathlib import Path
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
@@ -148,3 +148,302 @@ def test_main_preprocessing_e2e(tmp_path: Path):
     assert scaler_output_path.exists(), "Scaler artifact not found."
     scaler = joblib.load(scaler_output_path)
     assert isinstance(scaler, (MinMaxScaler, StandardScaler))
+
+
+def test_get_logger_function():
+    """Test get_logger function to cover missing lines 33."""
+    from src.preprocess.preprocessing import get_logger
+    
+    # Test with config that creates directory
+    config = {"log_file": "/tmp/test_logs/preprocessing.log", "level": "DEBUG"}
+    logger = get_logger(config)
+    
+    assert logger is not None
+    assert logger.name == "src.preprocess.preprocessing"
+    
+    logger2 = get_logger({})
+    assert logger2 is not None
+
+
+def test_load_config_file_not_found():
+    """Test load_config with missing file to cover lines 61-62."""
+    from src.preprocess.preprocessing import load_config
+    
+    with pytest.raises(FileNotFoundError):
+        load_config("non_existent_config.yaml")
+
+
+def test_validate_preprocessing_config_missing_keys():
+    """Test validate_preprocessing_config with missing keys to cover lines 78, 80."""
+    from src.preprocess.preprocessing import validate_preprocessing_config
+    
+    config_missing_raw = {
+        "preprocessing": {},
+        "artifacts": {},
+        "data_source": {"processed_path": "/tmp/processed.csv"},
+        "logging": {}
+    }
+    
+    with pytest.raises(KeyError, match="Missing 'raw_path'"):
+        validate_preprocessing_config(config_missing_raw)
+    
+    config_missing_processed = {
+        "preprocessing": {},
+        "artifacts": {},
+        "data_source": {"raw_path": "/tmp/raw.csv"},
+        "logging": {}
+    }
+    
+    with pytest.raises(KeyError, match="Missing 'processed_path'"):
+        validate_preprocessing_config(config_missing_processed)
+
+
+def test_validate_preprocessing_config_warnings():
+    """Test validate_preprocessing_config warning paths to cover lines 86, 88, 90, 92."""
+    from src.preprocess.preprocessing import validate_preprocessing_config
+    from unittest.mock import MagicMock, call
+    
+    mock_logger = MagicMock()
+    
+    config_minimal = {
+        "preprocessing": {},
+        "artifacts": {},
+        "data_source": {"raw_path": "/tmp/raw.csv", "processed_path": "/tmp/processed.csv"},
+        "logging": {}
+    }
+    
+    validate_preprocessing_config(config_minimal, logger_param=mock_logger)
+    
+    warning_calls = [call for call in mock_logger.warning.call_args_list]
+    assert len(warning_calls) >= 3  # Should have warnings for missing sections
+    
+    config_outlier_no_features = {
+        "preprocessing": {
+            "outlier_removal": {"enabled": True}
+        },
+        "artifacts": {},
+        "data_source": {"raw_path": "/tmp/raw.csv", "processed_path": "/tmp/processed.csv"},
+        "logging": {}
+    }
+    
+    mock_logger.reset_mock()
+    validate_preprocessing_config(config_outlier_no_features, logger_param=mock_logger)
+    
+    config_scale_no_columns = {
+        "preprocessing": {
+            "scale": {}
+        },
+        "artifacts": {},
+        "data_source": {"raw_path": "/tmp/raw.csv", "processed_path": "/tmp/processed.csv"},
+        "logging": {}
+    }
+    
+    mock_logger.reset_mock()
+    validate_preprocessing_config(config_scale_no_columns, logger_param=mock_logger)
+
+
+def test_drop_columns_edge_cases():
+    """Test drop_columns edge cases to cover lines 99-100, 104-105."""
+    from src.preprocess.preprocessing import drop_columns
+    
+    df = pd.DataFrame({"A": [1, 2, 3], "B": [4, 5, 6]})
+    
+    result = drop_columns(df, [])
+    assert result.equals(df)
+    
+    result = drop_columns(df, ["C", "D"])
+    assert result.equals(df)
+
+
+def test_remove_outliers_iqr_edge_cases():
+    """Test remove_outliers_iqr edge cases to cover lines 116-117, 125-126, 128-129, 136-137."""
+    from src.preprocess.preprocessing import remove_outliers_iqr
+    
+    df = pd.DataFrame({
+        "A": [1, 2, 3, 4, 5],
+        "B": [1, 1, 1, 1, 1],  # All same values (IQR = 0)
+        "C": ["a", "b", "c", "d", "e"]  # Non-numeric
+    })
+    
+    result = remove_outliers_iqr(df, [], 1.5)
+    assert result.equals(df)
+    
+    result = remove_outliers_iqr(df, ["D"], 1.5)
+    assert result.equals(df)
+    
+    result = remove_outliers_iqr(df, ["C"], 1.5)
+    assert result.equals(df)
+    
+    result = remove_outliers_iqr(df, ["B"], 1.5)
+    assert result.equals(df)
+
+
+def test_scale_columns_edge_cases():
+    """Test scale_columns edge cases to cover lines 158-159, 167-168, 170-171, 175-176, 181-185."""
+    from src.preprocess.preprocessing import scale_columns
+    
+    df = pd.DataFrame({
+        "A": [1, 2, 3, 4, 5],
+        "B": ["a", "b", "c", "d", "e"]  # Non-numeric
+    })
+    
+    result, scaler = scale_columns(df, [], "minmax")
+    assert result.equals(df)
+    assert scaler is None
+    
+    result, scaler = scale_columns(df, ["C"], "minmax")
+    assert result.equals(df)
+    assert scaler is None
+    
+    result, scaler = scale_columns(df, ["B"], "minmax")
+    assert result.equals(df)
+    assert scaler is None
+    
+    result, scaler = scale_columns(df, ["A"], "unsupported")
+    assert result.equals(df)
+    assert scaler is None
+
+
+def test_save_data_and_artifact_edge_cases(tmp_path):
+    """Test save_data_and_artifact edge cases to cover lines 205-208."""
+    from src.preprocess.preprocessing import save_data_and_artifact
+    from sklearn.preprocessing import MinMaxScaler
+    
+    df = pd.DataFrame({"A": [1, 2, 3]})
+    data_path = tmp_path / "test_data.csv"
+    
+    save_data_and_artifact(df, str(data_path), None, str(tmp_path / "scaler.pkl"))
+    
+    scaler = MinMaxScaler()
+    save_data_and_artifact(df, str(data_path), scaler, None)
+
+
+def test_main_preprocessing_config_load_error():
+    """Test main_preprocessing with config load error to cover lines 214-217."""
+    from src.preprocess.preprocessing import main_preprocessing
+    
+    main_preprocessing(config_path="non_existent_config.yaml")
+
+
+def test_main_preprocessing_config_validation_error(tmp_path):
+    """Test main_preprocessing with config validation error to cover lines 224-226."""
+    from src.preprocess.preprocessing import main_preprocessing
+    
+    invalid_config = {"some_key": "some_value"}
+    config_path = tmp_path / "invalid_config.yaml"
+    with open(config_path, "w") as f:
+        yaml.safe_dump(invalid_config, f)
+    
+    main_preprocessing(config_path=str(config_path))
+
+
+@patch('src.preprocess.preprocessing.get_raw_data')
+def test_main_preprocessing_data_load_errors(mock_get_raw_data, tmp_path):
+    """Test main_preprocessing with data loading errors to cover lines 238-239, 241-249."""
+    from src.preprocess.preprocessing import main_preprocessing
+    from unittest.mock import patch
+    
+    config = {
+        "preprocessing": {},
+        "artifacts": {},
+        "data_source": {"raw_path": "/tmp/raw.csv", "processed_path": "/tmp/processed.csv"},
+        "logging": {}
+    }
+    config_path = tmp_path / "test_config.yaml"
+    with open(config_path, "w") as f:
+        yaml.safe_dump(config, f)
+    
+    mock_get_raw_data.return_value = None
+    main_preprocessing(config_path=str(config_path))
+    
+    mock_get_raw_data.return_value = pd.DataFrame()
+    main_preprocessing(config_path=str(config_path))
+    
+    mock_get_raw_data.side_effect = FileNotFoundError("File not found")
+    main_preprocessing(config_path=str(config_path))
+    
+    mock_get_raw_data.side_effect = ValueError("Invalid data")
+    main_preprocessing(config_path=str(config_path))
+    
+    mock_get_raw_data.side_effect = Exception("Unexpected error")
+    main_preprocessing(config_path=str(config_path))
+
+
+@patch('src.preprocess.preprocessing.get_raw_data')
+def test_main_preprocessing_holdout_split_errors(mock_get_raw_data, tmp_path):
+    """Test main_preprocessing with holdout split errors to cover lines 270-276, 279-280."""
+    from src.preprocess.preprocessing import main_preprocessing
+    from unittest.mock import patch
+    
+    config = {
+        "preprocessing": {},
+        "artifacts": {},
+        "data_source": {
+            "raw_path": "/tmp/raw.csv", 
+            "processed_path": "/tmp/processed.csv",
+            "inference_holdout_path": str(tmp_path / "holdout.csv"),
+            "inference_holdout_size": 0.2
+        },
+        "data_split": {"random_state": 42},
+        "logging": {}
+    }
+    config_path = tmp_path / "test_config.yaml"
+    with open(config_path, "w") as f:
+        yaml.safe_dump(config, f)
+    
+    mock_data = pd.DataFrame({"A": [1, 2, 3, 4, 5], "B": [6, 7, 8, 9, 10]})
+    mock_get_raw_data.return_value = mock_data
+    
+    with patch('src.preprocess.preprocessing.train_test_split', side_effect=Exception("Split error")):
+        main_preprocessing(config_path=str(config_path))
+    
+    with patch('src.preprocess.preprocessing.train_test_split', return_value=(mock_data, pd.DataFrame())):
+        main_preprocessing(config_path=str(config_path))
+
+
+@patch('src.preprocess.preprocessing.get_raw_data')
+def test_main_preprocessing_empty_pipeline_data(mock_get_raw_data, tmp_path):
+    """Test main_preprocessing with empty pipeline data to cover lines 279-280."""
+    from src.preprocess.preprocessing import main_preprocessing
+    
+    config = {
+        "preprocessing": {},
+        "artifacts": {},
+        "data_source": {"raw_path": "/tmp/raw.csv", "processed_path": "/tmp/processed.csv"},
+        "logging": {}
+    }
+    config_path = tmp_path / "test_config.yaml"
+    with open(config_path, "w") as f:
+        yaml.safe_dump(config, f)
+    
+    mock_get_raw_data.return_value = pd.DataFrame()
+    
+    main_preprocessing(config_path=str(config_path))
+
+
+@patch('src.preprocess.preprocessing.get_raw_data')
+def test_main_preprocessing_missing_processed_path(mock_get_raw_data, tmp_path):
+    """Test main_preprocessing with missing processed_path to cover line 306."""
+    from src.preprocess.preprocessing import main_preprocessing
+    
+    config = {
+        "preprocessing": {},
+        "artifacts": {},
+        "data_source": {"raw_path": "/tmp/raw.csv"},  # Missing processed_path
+        "logging": {}
+    }
+    config_path = tmp_path / "test_config.yaml"
+    with open(config_path, "w") as f:
+        yaml.safe_dump(config, f)
+    
+    mock_data = pd.DataFrame({"A": [1, 2, 3], "B": [4, 5, 6]})
+    mock_get_raw_data.return_value = mock_data
+    
+    main_preprocessing(config_path=str(config_path))
+
+
+def test_main_preprocessing_standalone_execution():
+    """Test standalone execution paths to cover lines 314-324."""
+    from src.preprocess.preprocessing import main_preprocessing
+    
+    main_preprocessing(config_path="non_existent_config.yaml")
