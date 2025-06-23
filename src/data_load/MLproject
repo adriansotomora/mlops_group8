@@ -1,3 +1,4 @@
+# src/data_load/MLproject
 name: data_load
 conda_env: conda.yml
 
@@ -8,6 +9,6 @@ entry_points:
         type: str
         default: ""
         description: Extra Hydra overrides (optional)
-
+# The $(echo …) pattern swallows the token when hydra_options == ""
     command: >
       python run.py
