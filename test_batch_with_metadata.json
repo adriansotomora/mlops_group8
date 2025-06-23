@@ -1,0 +1,50 @@
+[
+  {
+    "track_name": "How to Save a Life",
+    "year": 2007,
+    "artist_popularity": 67.0,
+    "genre": "rock",
+    "danceability": 0.64,
+    "energy": 0.743,
+    "liveness": 0.101,
+    "loudness": 61.0,
+    "speechiness": 0.0379,
+    "tempo": 122.0,
+    "valence": 0.361,
+    "duration_ms": 262533.0,
+    "acousticness": 0.269,
+    "key": 10.0
+  },
+  {
+    "track_name": "Con Calma",
+    "year": 2019,
+    "artist_popularity": 85.0,
+    "genre": "latin",
+    "danceability": 0.737,
+    "energy": 0.86,
+    "liveness": 0.0574,
+    "loudness": 42.0,
+    "speechiness": 0.0593,
+    "tempo": 93.989,
+    "valence": 0.656,
+    "duration_ms": 193227.0,
+    "acousticness": 0.11,
+    "key": 8.0
+  },
+  {
+    "track_name": "Digital Love",
+    "year": 2022,
+    "artist_popularity": 78.0,
+    "genre": "electronic",
+    "danceability": 0.85,
+    "energy": 0.72,
+    "liveness": 0.08,
+    "loudness": 55.0,
+    "speechiness": 0.045,
+    "tempo": 128.0,
+    "valence": 0.75,
+    "duration_ms": 210000.0,
+    "acousticness": 0.15,
+    "key": 5.0
+  }
+]
