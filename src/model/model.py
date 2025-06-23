@@ -9,23 +9,28 @@ import os
 import json
 import logging
 import pickle
+import sys
+from pathlib import Path
 from typing import List, Tuple, Dict, Any
+import joblib
+import mlflow
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
+import wandb
 import yaml
-from src.features.pipeline import build_feature_pipeline
-import joblib
 from sklearn.model_selection import train_test_split
 
-import sys
-from pathlib import Path
+# Add the project root to the Python path
 project_root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(project_root))
 
-from src.evaluation.evaluator import evaluate_statsmodels_model 
+from src.features.pipeline import build_feature_pipeline
+from src.evaluation.evaluator import evaluate_statsmodels_model
+
 
 logger = logging.getLogger(__name__)
+
 
 def get_logger(logging_config: Dict[str, Any], config_dir: str) -> logging.Logger:
     log_file_rel = logging_config.get("log_file", "logs/modeling.log") 
@@ -385,9 +390,32 @@ def main_modeling(config_path: str = "config.yaml") -> None:
     logger.info(f"Modeling pipeline for '{active_model_type}' completed successfully.")
     logger.info(f"Final saved metrics (raw): {evaluation_metrics}")
 
+    # MLflow and W&B Integration
+    logger.info("Logging parameters and metrics to MLflow and W&B.")
+
+    # Log parameters
+    mlflow.log_params(config['data_split'])
+    mlflow.log_params(config['model'][active_model_type])
+
+    # Log metrics
+    mlflow.log_metrics(evaluation_metrics)
+
+    # Log model
+    mlflow.statsmodels.log_model(
+        sm_model=trained_model,
+        artifact_path="model",
+        registered_model_name=f"{active_model_type}-model"
+    )
+
+    # W&B Logging
+    wandb.log(config['data_split'])
+    wandb.log(config['model'][active_model_type])
+    wandb.log(evaluation_metrics)
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(name)s - %(message)s")
-    config_file_path = "config.yaml" 
+    config_file_path = "config.yaml"
     if not os.path.exists(config_file_path):
         logging.critical(f"CRITICAL: Main - Configuration file '{config_file_path}' not found. Modeling cannot start.")
     else:
