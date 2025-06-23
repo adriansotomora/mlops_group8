@@ -60,6 +60,11 @@ app = FastAPI()
 
 
 class PredictionInput(BaseModel):
+    # Metadata fields (for display only, not used in model)
+    track_name: str = Field(..., description="Name of the track (for display purposes only)")
+    year: int = Field(..., ge=1900, le=2030, description="Year of the track (for display purposes only)")
+    
+    # Model features (these are actually used for prediction)
     artist_popularity: float = Field(..., ge=0.0, le=100.0)
     genre: str = Field(...)
     danceability: float = Field(..., ge=0.0, le=1.0)
@@ -76,12 +81,14 @@ class PredictionInput(BaseModel):
     class Config:
         schema_extra = {
             "example": {
+                "track_name": "How to Save a Life",
+                "year": 2007,
                 "artist_popularity": 75.0,
                 "genre": "rock",
                 "danceability": 0.735,
                 "energy": 0.578,
                 "liveness": 0.0985,
-                "loudness": -11.84,
+                "loudness": 61.0,
                 "speechiness": 0.0596,
                 "tempo": 75.0,
                 "valence": 0.471,
@@ -114,6 +121,12 @@ def predict(payload: PredictionInput):
         raise HTTPException(status_code=503, detail="Model not loaded")
     
     data = payload.dict()
+    
+    # Extract metadata (not used in model)
+    track_name = data.pop('track_name')
+    year = data.pop('year')
+    
+    # Create DataFrame with only model features
     df = pd.DataFrame([data])
 
     # --- Correction 1: Print pipeline expected feature names ---
@@ -135,43 +148,58 @@ def predict(payload: PredictionInput):
             df_processed = PIPELINE.transform(df)
             print("DEBUG: Type after pipeline.transform:", type(df_processed))
             print("DEBUG: Shape after pipeline.transform:", getattr(df_processed, "shape", "no shape"))
-            # If not a DataFrame, convert to DataFrame with feature names
-            if not isinstance(df_processed, pd.DataFrame):
-                try:
-                    if hasattr(PIPELINE, "get_feature_names_out"):
-                        feature_names = PIPELINE.get_feature_names_out()
-                    else:
-                        feature_names = [f"f{i}" for i in range(df_processed.shape[1])]
-                except Exception as e:
-                    print(f"DEBUG: Could not get feature names: {e}")
-                    feature_names = [f"f{i}" for i in range(df_processed.shape[1])]
-                df_processed = pd.DataFrame(df_processed, columns=feature_names)
-            print("DEBUG: Columns after pipeline.transform:", df_processed.columns.tolist())
             
-            # The model expects specific features - let's map from pipeline output
+            # Get proper feature names from the pipeline
+            try:
+                feature_names = PIPELINE.named_steps["preprocessor"].get_feature_names_out()
+                print("DEBUG: Got feature names from preprocessor:", len(feature_names), "features")
+            except Exception as e:
+                print(f"DEBUG: Could not get feature names from preprocessor: {e}")
+                feature_names = [f"f{i}" for i in range(df_processed.shape[1])]
+            
+            # Convert to DataFrame with proper feature names
+            df_processed = pd.DataFrame(df_processed, columns=feature_names)
+            print("DEBUG: Sample of features after pipeline:", df_processed.columns.tolist()[:10])
+            
+            # Get model's expected features (excluding 'const')
             expected_features = MODEL.model.exog_names
-            print("DEBUG: Model expects these features:", expected_features)
+            model_features = [f for f in expected_features if f != 'const']
+            print("DEBUG: Model expects these features (excluding const):", model_features)
             
-            # For now, let's select the first few features that might correspond
-            # This is a temporary fix - ideally the pipeline should output the right feature names
-            if len(expected_features) <= len(df_processed.columns):
-                # Select subset of features (excluding 'const' which we'll add)
-                model_features = [f for f in expected_features if f != 'const']
-                n_features_needed = len(model_features)
-                selected_features = df_processed.iloc[:, :n_features_needed]
-                selected_features.columns = model_features
-                # Add constant
-                df_processed = sm.add_constant(selected_features, has_constant='add')
-            else:
-                # Add constant for statsmodels
-                df_processed = sm.add_constant(df_processed, has_constant='add')
+            # Select features by name (this is the fix!)
+            missing_features = [f for f in model_features if f not in df_processed.columns]
+            if missing_features:
+                print(f"DEBUG: Missing features: {missing_features}")
+                raise ValueError(f"Missing required features: {missing_features}")
             
-            print("DEBUG: Final input columns to model:", df_processed.columns.tolist())
-            print("DEBUG: Final input shape to model:", df_processed.shape)
-            prediction = MODEL.predict(df_processed)[0]
+            # Select the correct features by name
+            selected_features = df_processed[model_features]
+            print("DEBUG: Selected feature values:", selected_features.iloc[0].to_dict())
+            
+            # Add constant for statsmodels
+            df_final = sm.add_constant(selected_features, has_constant='add')
+            print("DEBUG: Final input columns to model:", df_final.columns.tolist())
+            print("DEBUG: Final input shape to model:", df_final.shape)
+            
+            prediction = MODEL.predict(df_final)[0]
         else:
             prediction = MODEL.predict(df)[0]
-        return {"prediction": float(prediction)}
+        
+        # Create user-friendly response message with success buckets
+        success_percentage = round(float(prediction), 1)
+        
+        if success_percentage <= 20:
+            message = f"'{track_name}' will be a bust! It has an expected success of {success_percentage}%!"
+        elif success_percentage <= 40:
+            message = f"'{track_name}' will not be successful! It has an expected success of {success_percentage}%!"
+        elif success_percentage <= 60:
+            message = f"'{track_name}' will maybe be a hit! It has an expected success of {success_percentage}%!"
+        elif success_percentage <= 80:
+            message = f"'{track_name}' has a great chance! It has an expected success of {success_percentage}%!"
+        else:
+            message = f"'{track_name}' will be an absolute HIT! It has an expected success of {success_percentage}%!"
+        
+        return {"message": message}
     except Exception as e:
         print("DEBUG: Exception during prediction:", e)
         raise HTTPException(status_code=400, detail=f"Prediction failed: {str(e)}")
@@ -181,7 +209,20 @@ def predict_batch(payloads: list[PredictionInput]):
     if MODEL is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
     
-    df = pd.DataFrame([p.dict() for p in payloads])
+    # Extract all data
+    all_data = [p.dict() for p in payloads]
+    
+    # Separate metadata from model features
+    metadata = []
+    model_data = []
+    
+    for data in all_data:
+        track_name = data.pop('track_name')
+        year = data.pop('year')
+        metadata.append({'track_name': track_name, 'year': year})
+        model_data.append(data)
+    
+    df = pd.DataFrame(model_data)
     
     # Use same feature ordering as single prediction
     if PIPELINE is not None and hasattr(PIPELINE, "feature_names_in_"):
@@ -197,38 +238,54 @@ def predict_batch(payloads: list[PredictionInput]):
     try:
         if PIPELINE is not None:
             df_processed = PIPELINE.transform(df)
-            # Convert to DataFrame with feature names like in single prediction
-            if not isinstance(df_processed, pd.DataFrame):
-                try:
-                    if hasattr(PIPELINE, "get_feature_names_out"):
-                        feature_names = PIPELINE.get_feature_names_out()
-                    else:
-                        feature_names = [f"f{i}" for i in range(df_processed.shape[1])]
-                except Exception as e:
-                    feature_names = [f"f{i}" for i in range(df_processed.shape[1])]
-                df_processed = pd.DataFrame(df_processed, columns=feature_names)
             
-            # Apply same feature selection logic as single prediction
+            # Get proper feature names from the pipeline
+            try:
+                feature_names = PIPELINE.named_steps["preprocessor"].get_feature_names_out()
+            except Exception as e:
+                feature_names = [f"f{i}" for i in range(df_processed.shape[1])]
+            
+            # Convert to DataFrame with proper feature names
+            df_processed = pd.DataFrame(df_processed, columns=feature_names)
+            
+            # Get model's expected features (excluding 'const')
             expected_features = MODEL.model.exog_names
-            if len(expected_features) <= len(df_processed.columns):
-                # Select subset of features (excluding 'const' which we'll add)
-                model_features = [f for f in expected_features if f != 'const']
-                n_features_needed = len(model_features)
-                selected_features = df_processed.iloc[:, :n_features_needed]
-                selected_features.columns = model_features
-                # Add constant
-                df_processed = sm.add_constant(selected_features, has_constant='add')
-            else:
-                # Add constant for statsmodels
-                df_processed = sm.add_constant(df_processed, has_constant='add')
+            model_features = [f for f in expected_features if f != 'const']
             
-            predictions = MODEL.predict(df_processed)
+            # Select features by name (same fix as single prediction)
+            missing_features = [f for f in model_features if f not in df_processed.columns]
+            if missing_features:
+                raise ValueError(f"Missing required features: {missing_features}")
+            
+            # Select the correct features by name
+            selected_features = df_processed[model_features]
+            
+            # Add constant for statsmodels
+            df_final = sm.add_constant(selected_features, has_constant='add')
+            
+            predictions = MODEL.predict(df_final)
         else:
             predictions = MODEL.predict(df)
         
         results = []
         for i, pred in enumerate(predictions):
-            result = {"prediction": float(pred)}
+            success_percentage = round(float(pred), 1)
+            track_name = metadata[i]['track_name']
+            year = metadata[i]['year']
+            
+            # Apply same success buckets as single prediction
+            if success_percentage <= 20:
+                message = f"'{track_name}' will be a bust! It has an expected success of {success_percentage}%!"
+            elif success_percentage <= 40:
+                message = f"'{track_name}' will not be successful! It has an expected success of {success_percentage}%!"
+            elif success_percentage <= 60:
+                message = f"'{track_name}' will maybe be a hit! It has an expected success of {success_percentage}%!"
+            elif success_percentage <= 80:
+                message = f"'{track_name}' has a great chance! It has an expected success of {success_percentage}%!"
+            else:
+                message = f"'{track_name}' will be an absolute HIT! It has an expected success of {success_percentage}%!"
+            
+            result = {"message": message}
             results.append(result)
         
         return results
