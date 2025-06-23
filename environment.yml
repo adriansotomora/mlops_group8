@@ -13,16 +13,13 @@ dependencies:
   - python-dotenv
   - pytest
   - pytest-dotenv
-  - scikit-learn=1.5.1
+  - scikit-learn
   - statsmodels
   - joblib
   - matplotlib
   - seaborn
-  - scipy=1.11
+  - scipy
   - pip
-  - fastapi
-  - uvicorn
-
 
   - pip:
       - pytest-cov
@@ -34,6 +31,3 @@ dependencies:
       - fastapi
       - uvicorn
       - pydantic
-      - joblib
-      - pydantic
-

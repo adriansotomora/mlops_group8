@@ -191,6 +191,7 @@ features: # Configuration for feature engineering steps in features.py
     - indie
     - jazz
     - r&b
+    - soul
     - metal
     - classic
     - country
