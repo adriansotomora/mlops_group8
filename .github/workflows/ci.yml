@@ -34,4 +34,4 @@ jobs:
         MLOPS_ENV_STAGING: ${{ secrets.MLOPS_ENV_STAGING }}
         WANDB_MODE: offline
       run: |
-        mlflow run . --no-conda
+        mlflow run . -e main
