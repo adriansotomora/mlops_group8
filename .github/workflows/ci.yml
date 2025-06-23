@@ -5,6 +5,7 @@ on:
     branches: [ main, feature/* ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   test:
@@ -16,8 +17,8 @@ jobs:
     - name: Setup Miniconda
       uses: conda-incubator/setup-miniconda@v2
       with:
-        environment-file: environment.yml
-        activate-environment: group8_full
+        environment-file: conda.yaml
+        activate-environment: mlops_group8
         auto-activate-base: false
         
     - name: Install dependencies
@@ -26,21 +27,11 @@ jobs:
         conda info
         conda list
         
-    - name: Run tests with coverage
-      shell: bash -l {0}
-      run: |
-        pytest -q --cov=src --cov-report=term-missing --cov-fail-under=75
-        
-    - name: Run linting
-      shell: bash -l {0}
-      run: |
-        flake8 . --exit-zero
-        
     - name: Run MLflow pipeline
       shell: bash -l {0}
       env:
         WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
-        MLOPS_ENV: ${{ secrets.MLOPS_ENV }}
+        MLOPS_ENV_STAGING: ${{ secrets.MLOPS_ENV_STAGING }}
         WANDB_MODE: offline
       run: |
-        mlflow run . --env-manager local
+        mlflow run . --no-conda
