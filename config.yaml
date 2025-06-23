@@ -1,0 +1,239 @@
+# This file is used to set up the parameters for data loading, logging, and other settings.
+
+main:
+  WANDB_PROJECT: mlops_group8
+  WANDB_ENTITY: yeabsiraseleshi-ie-university
+  steps: all
+  hydra_options: ""
+
+data_source:
+  raw_path: "data/raw/Songs_2025.csv" # Path to the original raw data file
+  processed_path: "data/processed/Songs_2025_processed.csv" # Path for saving/loading the main preprocessed dataset (after holdout split)
+  type: "csv"                      # Data file type for raw_path
+  delimiter: ","                   # CSV delimiter for raw_path
+  header: 0                        # Header row index for raw_path
+  encoding: "utf-8"                # File encoding for raw_path
+  
+  # --- Parameters for splitting off a raw holdout set for inference ---
+  inference_holdout_path: "data/raw_holdout/inference_holdout_data.csv" # Path to save the untouched inference holdout set
+  inference_holdout_size: 0.1 # Proportion of raw data to set aside (e.g., 0.1 for 10%). Set to 0 or remove key to disable.
+
+logging:
+  level: "INFO"                         # Logging level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  log_file: "logs/pipeline_main.log"  # Main log file for the pipeline runs
+  format: "%(asctime)s - %(levelname)s - %(name)s - %(module)s - %(message)s" # Detailed log format
+  datefmt: "%Y-%m-%d %H:%M:%S"          # Timestamp format for logs
+
+data_load:
+  output_dir: "data/processed"
+
+data_validation:
+  input_artifact: "raw_data:latest"
+  output_artifact: "validated_data"
+  report_path: "logs/validation_report.json"
+  enabled: true
+  action_on_error: "raise"
+  schema: # Expected schema for the raw data (raw_path)
+    columns:
+      - name: "year"
+        dtype: "int"
+        required: true
+        min: 2000
+        max: 2025
+      - name: "track_name"
+        dtype: "str"
+        required: true
+      - name: "track_popularity" # Target variable
+        dtype: "int"
+        required: true
+        min: 0
+        max: 100
+      - name: "album"
+        dtype: "str"
+        required: true
+      - name: "artist_name"
+        dtype: "str"
+        required: true
+      - name: "artist_genres" 
+        dtype: "str"      
+        required: true
+      - name: "artist_popularity"
+        dtype: "int"
+        required: true
+        min: 0
+        max: 100
+      - name: "danceability"
+        dtype: "float"
+        required: true # Assuming required for scaling
+        min: 0.0 
+        max: 1.0
+      - name: "energy"
+        dtype: "float"
+        required: true # Assuming required for scaling
+        min: 0.0 
+        max: 1.0
+      - name: "key"
+        dtype: "float" # Often int (0-11), but float if scaled
+        required: true
+        min: 0.0
+        max: 11.0
+      - name: "loudness"
+        dtype: "float"
+        required: true
+        min: -60.0 # Adjusted typical min
+      - name: "mode" # Binary (0 or 1)
+        dtype: "float" 
+        required: true
+        min: 0.0
+        max: 1.0
+      - name: "speechiness"
+        dtype: "float"
+        required: true
+        min: 0.0
+        max: 1.0
+      - name: "acousticness"
+        dtype: "float"
+        required: true
+        min: 0.0
+        max: 1.0
+      - name: "instrumentalness" # Will be dropped by preprocessing.drop_columns
+        dtype: "float"
+        required: true # Or false if sometimes missing before drop
+        min: 0.0
+        max: 1.0
+      - name: "liveness"
+        dtype: "float"
+        required: true
+        min: 0.0
+        max: 1.0
+      - name: "valence"
+        dtype: "float"
+        required: true
+        min: 0.0
+        max: 1.0
+      - name: "tempo"
+        dtype: "float"
+        required: true
+        min: 0.0 # Tempo usually positive
+        # max: 250.0 # Example max
+      - name: "duration_ms"
+        dtype: "float" # Often int, but float is fine
+        required: true
+        min: 0.0 # Duration usually positive
+        # max: 3600000 # Example 1 hour
+
+data_split: # Configuration for train/test split in model.py
+  test_size: 0.2 # Proportion of the (post-holdout) data to use for the test set
+  valid_size: 0.2 # Note: valid_size is defined but not actively used by current model.py's train_test_split
+  random_state: 42 # Ensures reproducibility of all splits (holdout, train/test)
+
+model:
+  active: linear_regression  # Specifies which model configuration to use from below
+
+  logistic_regression: 
+    save_path: "models/logistic_regression.pkl"
+    selected_features_path: "models/logistic_regression_selected_features.json" # Path to save selected features for this model
+    params: {} 
+
+  knn: 
+    save_path: "models/knn.pkl"
+    selected_features_path: "models/knn_selected_features.json"
+    params: {}
+
+  kmeans: 
+    save_path: "models/kmeans.pkl"
+    # No selected_features_path needed for unsupervised KMeans
+    k_min: 1
+    k_max: 10
+    n_clusters: 3
+    random_state: 42
+
+  linear_regression:
+    save_path: "models/linear_regression.pkl" 
+    selected_features_path: "models/linear_regression_selected_features.json" # Explicit path for clarity
+    stepwise:
+      enabled: true # Explicitly enable/disable stepwise selection
+      threshold_in: 0.05 # p-value to enter
+      threshold_out: 0.1  # p-value to remove
+      verbose: true # Log stepwise selection details
+
+features: # Configuration for feature engineering steps in features.py
+  exclude: # Columns to exclude from final feature set (after all transformations)
+    - year 
+  profiling_variables: # Columns used for profiling, also excluded from final modeling features
+    - track_popularity # This is the target, should not be a feature
+    - artist_popularity 
+    - energy
+    - mode
+  drop: # Columns to drop during the feature engineering stage (by features.py)
+    - track_name
+    - album
+    - artist_name
+    - cluster # If 'cluster' is a raw column to be dropped
+    - artist_genres # Original genre string, dropped after parsing
+    # - year # 'year' is already in 'exclude', can be removed from here if redundant logic
+  audio_features: # List of numeric audio features used for polynomial feature creation
+    - danceability
+    - energy
+    - liveness
+    - loudness
+    - speechiness
+    - tempo
+    - valence
+    - duration_ms
+    - artist_popularity
+  genre_features: # Base names for genre dummy variables used for polynomial creation (e.g., 'pop' -> 'genre_pop')
+    - pop
+    - rock
+    - electronic
+    - latin
+    - hip-hop
+    - indie
+    - jazz
+    - r&b
+    - metal
+    - classic
+    - country
+  polynomial: # Configuration for generating polynomial features
+    audio:
+      degree: 2
+      include_bias: false
+      interaction_only: false # Set to true for only interaction terms
+    genre:
+      degree: 2
+      include_bias: false
+      interaction_only: false
+
+target: track_popularity # Name of the target variable for model training
+
+metrics: # List of metrics to calculate (primarily for classification, regression metrics are hardcoded in evaluator)
+  # For regression, evaluator_regression.py calculates: mse, rmse, mae, r2, adj_r2, mape
+  # This section might be more relevant if you switch to a classification model
+  - mse 
+  - r2
+
+preprocessing: # Configuration for initial preprocessing steps in preprocessing.py
+  drop_columns: # Columns to be dropped by preprocessing.py (before feature engineering)
+    - instrumentalness
+  outlier_removal:
+    enabled: true
+    features: [duration_ms, track_popularity] # Features for IQR outlier removal
+    iqr_multiplier: 1.5
+  scale:
+    columns: [danceability, energy, loudness, speechiness, acousticness, liveness, valence, tempo, duration_ms, key] # Numeric columns to scale
+    method: minmax # Scaling method: "minmax" or "standard"
+
+artifacts:
+  # Paths for outputs from model.py
+  metrics_path: models/metrics.json 
+  # Path for scaler from preprocessing.py
+  preprocessing_pipeline: models/preprocessing_pipeline.pkl 
+  
+  # Directory for saving data splits (e.g., train/test CSVs if model.py saves them)
+  splits_dir: data/splits # Currently not used by the regression model.py for saving splits
+  
+  # Base directory for processed data files (e.g., features.csv)
+  processed_dir: data/processed 
+  # Specific filenames for outputs of features.py, used by model.py and inferencer.py
+  engineered_features_filename: "features.csv" 
+  feature_list_filename: "feature_list.txt" # Output by features.py

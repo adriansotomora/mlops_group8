@@ -1,0 +1,26 @@
+name: mlops_group8
+
+entry_points:
+
+  main:
+    parameters:
+      steps:
+        type: str
+        default: all
+        description: >-
+          Comma-separated list of pipeline steps
+          (e.g., "preprocess,features,model")
+    command: >
+      python main.py main.steps={steps}
+
+  main_with_override:
+    parameters:
+      steps:
+        type: str
+        default: all
+      hydra_options:
+        type: str
+        default: ""
+        description: Extra overrides in standard Hydra syntax
+    command: >
+      python main.py main.steps={steps} {hydra_options}
