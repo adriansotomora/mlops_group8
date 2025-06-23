@@ -1,12 +1,20 @@
 {
     "selected_features": [
-        "audio_poly__artist_popularity",
-        "genre_passthrough__genre_rock",
-        "audio_poly__energy duration_ms",
-        "genre_passthrough__genre_electronic",
-        "genre_passthrough__genre_indie",
-        "genre_passthrough__genre_latin",
-        "genre_passthrough__genre_metal"
+        "poly_audio_artist_popularitypow2",
+        "poly_audio_energy_duration_ms",
+        "poly_genre_genre_hip_hop_genre_randb",
+        "genre_rock",
+        "poly_genre_genre_rockpow2",
+        "poly_audio_speechiness_valence",
+        "genre_indie",
+        "poly_genre_genre_indiepow2",
+        "poly_audio_danceability_artist_popularity",
+        "acousticness",
+        "genre_metal",
+        "poly_genre_genre_metalpow2",
+        "poly_genre_genre_poppow2",
+        "poly_audio_danceability_duration_ms",
+        "genre_pop"
     ],
-    "count": 7
+    "count": 15
 }

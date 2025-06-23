@@ -10,24 +10,30 @@ import json
 import logging
 import pickle
 from typing import List, Tuple, Dict, Any
+
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
 import yaml
-from src.features.pipeline import build_feature_pipeline
-import joblib
+# MSE and R2 are calculated by the evaluator, but sklearn.model_selection is still used
 from sklearn.model_selection import train_test_split
 
+# Add src to path to allow for absolute imports
 import sys
 from pathlib import Path
+# Add the project root to the Python path
 project_root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(project_root))
 
+# Assuming evaluator_regression.py is in src/evaluation/
+# Adjust the import path if your evaluator_regression.py is located elsewhere.
 from src.evaluation.evaluator import evaluate_statsmodels_model 
 
+# Module-level logger - will be initialized by main_modeling
 logger = logging.getLogger(__name__)
 
 def get_logger(logging_config: Dict[str, Any], config_dir: str) -> logging.Logger:
+    """Set up and return a logger based on the provided configuration."""
     log_file_rel = logging_config.get("log_file", "logs/modeling.log") 
     log_file = os.path.join(config_dir, log_file_rel)
     log_dir = os.path.dirname(log_file)
@@ -71,6 +77,7 @@ def get_logger(logging_config: Dict[str, Any], config_dir: str) -> logging.Logge
     return module_logger
 
 def load_config(path: str = "config.yaml") -> Dict[str, Any]:
+    """Load YAML configuration file."""
     temp_logger = logging.getLogger(f"{__name__}.load_config")
     temp_logger.info(f"Loading configuration from: {path}")
     with open(path, "r") as f:
@@ -79,6 +86,7 @@ def load_config(path: str = "config.yaml") -> Dict[str, Any]:
     return config
 
 def validate_modeling_config(config: Dict[str, Any]) -> None:
+    """Validate the presence of essential keys in the modeling configuration."""
     logger.info("Validating modeling configuration.")
     required_top_keys = ["artifacts", "data_split", "model", "logging", "target", "data_source"]
     for key in required_top_keys:
@@ -103,6 +111,7 @@ def validate_modeling_config(config: Dict[str, Any]) -> None:
         raise KeyError("Missing 'metrics_path' in 'artifacts' config.")
     logger.info("Modeling configuration validation successful.")
 
+
 def stepwise_selection(
     X: pd.DataFrame,
     y: pd.Series,
@@ -110,6 +119,11 @@ def stepwise_selection(
     threshold_out: float = 0.1,
     verbose: bool = True
 ) -> List[str]:
+    """
+    Perform forward-backward stepwise selection using p-values.
+    
+    Returns a list of selected feature names.
+    """
     included: List[str] = []
     logger.info(f"Starting stepwise selection: threshold_in={threshold_in}, threshold_out={threshold_out}")
     
@@ -169,6 +183,7 @@ def train_linear_regression(
     y_train: pd.Series,
     model_config: Dict[str, Any] 
 ) -> Tuple[sm.regression.linear_model.RegressionResultsWrapper, List[str]]:
+    """Trains a linear regression model, possibly with stepwise selection."""
     step_cfg = model_config.get("stepwise", {})
     use_stepwise = step_cfg.get("enabled", True) 
 
@@ -204,13 +219,16 @@ def train_linear_regression(
     logger.debug(f"Model summary:\n{model.summary()}")
     return model, selected_features
 
+# Removed the old evaluate_regression function. It's now in evaluator_regression.py
+
 def save_model_artifacts(
     model: Any,
     selected_features: List[str],
-    metrics: Dict[str, float],
+    metrics: Dict[str, float], # These are raw metrics from the evaluator
     config: Dict[str, Any],
     config_dir: str
 ) -> None:
+    """Save the trained model, selected features, and evaluation metrics based on config."""
     model_cfg = config["model"]
     art_cfg = config["artifacts"]
     active_model_type = model_cfg["active"] 
@@ -245,11 +263,19 @@ def save_model_artifacts(
     metrics_dir = os.path.dirname(metrics_save_path)
     if metrics_dir and not os.path.exists(metrics_dir):
         os.makedirs(metrics_dir, exist_ok=True)
+        
+    # Round metrics before saving for consistent JSON output
+    # (or save raw metrics if preferred, evaluator already logs rounded ones)
+    # from src.evaluation.evaluator_regression import round_metrics_dict # Import if needed here
+    # rounded_metrics_to_save = round_metrics_dict(metrics) 
+    # For now, saving the raw metrics dict returned by the evaluator
     with open(metrics_save_path, "w") as f:
         json.dump(metrics, f, indent=4) 
     logger.info(f"Evaluation metrics saved to: {metrics_save_path}")
 
+
 def main_modeling(config_path: str = "config.yaml") -> None:
+    """Run the modeling pipeline."""
     try:
         config_abs_path = os.path.abspath(config_path)
         config_dir = os.path.dirname(config_abs_path)
@@ -276,55 +302,46 @@ def main_modeling(config_path: str = "config.yaml") -> None:
     target_column_name = config["target"]
     data_source_cfg = config["data_source"]
 
-    preprocessed_data_path = os.path.join(config_dir, data_source_cfg["processed_path"])
-    logger.info(f"Loading preprocessed data from: {preprocessed_data_path}")
+    features_file_name = art_cfg.get("engineered_features_filename", "features.csv")
+    features_input_path = os.path.join(config_dir, art_cfg["processed_dir"], features_file_name)
+    logger.info(f"Loading features (X) from: {features_input_path}")
     try:
-        df = pd.read_csv(preprocessed_data_path)
+        X_df = pd.read_csv(features_input_path)
     except FileNotFoundError:
-        logger.critical(f"Preprocessed data file not found at '{preprocessed_data_path}'. Exiting.")
+        logger.critical(f"Features file not found at '{features_input_path}'. Exiting.")
         return
     except Exception as e:
-        logger.critical(f"Error loading preprocessed data from '{preprocessed_data_path}': {e}. Exiting.")
+        logger.critical(f"Error loading features from '{features_input_path}': {e}. Exiting.")
         return
-    logger.info(f"Preprocessed data loaded. Shape: {df.shape}")
+    logger.info(f"Features (X) loaded. Shape: {X_df.shape}")
 
-    if target_column_name not in df.columns:
-        logger.critical(f"Target column '{target_column_name}' not found in preprocessed data. Exiting.")
+    target_data_path_rel = data_source_cfg["processed_path"]
+    target_data_path = os.path.join(config_dir, target_data_path_rel)
+    logger.info(f"Loading data for target variable '{target_column_name}' from: {target_data_path}")
+    try:
+        target_df = pd.read_csv(target_data_path)
+    except FileNotFoundError:
+        logger.critical(f"Target data file not found at '{target_data_path}'. Exiting.")
         return
-    y_series = df[target_column_name]
-    X_df = df.drop(columns=[target_column_name])
-    print("RAW FEATURES USED FOR PIPELINE:", X_df.columns.tolist())
-    print("ORDER OF RAW FEATURES:", X_df.columns.tolist())
+    except Exception as e:
+        logger.critical(f"Error loading target data from '{target_data_path}': {e}. Exiting.")
+        return
 
-    # Build and fit the feature engineering pipeline
-    pipeline = build_feature_pipeline(config)
-    pipeline.fit(X_df, y_series)
-    print("TRAIN PIPELINE FEATURE NAMES:", pipeline.named_steps["preprocessor"].get_feature_names_out())
-    # --- Correction: Print pipeline output feature names after fitting ---
-    if hasattr(pipeline, "get_feature_names_out"):
-        print("TRAIN PIPELINE FEATURE NAMES:", pipeline.named_steps["preprocessor"].get_feature_names_out())
-    else:
-        print("Pipeline does not have get_feature_names_out")
-    X_transformed = pipeline.transform(X_df)
-    feature_names = pipeline.named_steps["preprocessor"].get_feature_names_out()
-    X_transformed_df = pd.DataFrame(X_transformed, columns=feature_names, index=X_df.index)
-    print("Type of X_transformed_df:", type(X_transformed_df))
-    print("Type of y_series:", type(y_series))
+    if target_column_name not in target_df.columns:
+        logger.critical(f"Target column '{target_column_name}' not found in '{target_data_path}'. Exiting.")
+        return
+    y_series = target_df[target_column_name]
+    logger.info(f"Target variable (y) '{target_column_name}' loaded. Length: {len(y_series)}")
 
-    pipeline_path = os.path.join(config_dir, art_cfg["preprocessing_pipeline"])
-    joblib.dump(pipeline, pipeline_path)
-    logger.info(f"Pipeline saved to {pipeline_path}")
+    if not X_df.index.equals(target_df.index):
+        logger.warning("Indices of X (from features.csv) and target_df (from preprocessed.csv) do not match.")
+        min_len = min(len(X_df), len(y_series))
+        if len(X_df) != len(y_series):
+             logger.warning(f"X_df length ({len(X_df)}) and y_series length ({len(y_series)}) differ. Truncating to min_len: {min_len}")
+        X_df = X_df.iloc[:min_len].reset_index(drop=True) # Reset index after slicing
+        y_series = y_series.iloc[:min_len].reset_index(drop=True) # Reset index after slicing
+        logger.info("Applied basic alignment by slicing to minimum length and resetting index. Ensure data order is consistent.")
 
-    # If you have a target_df for index alignment, keep this block
-    # (otherwise, comment/remove if not needed)
-    # if not X_df.index.equals(target_df.index):
-    #     logger.warning("Indices of X (from features.csv) and target_df (from preprocessed.csv) do not match.")
-    #     min_len = min(len(X_df), len(y_series))
-    #     if len(X_df) != len(y_series):
-    #          logger.warning(f"X_df length ({len(X_df)}) and y_series length ({len(y_series)}) differ. Truncating to min_len: {min_len}")
-    #     X_df = X_df.iloc[:min_len].reset_index(drop=True)
-    #     y_series = y_series.iloc[:min_len].reset_index(drop=True)
-    #     logger.info("Applied basic alignment by slicing to minimum length and resetting index. Ensure data order is consistent.")
 
     logger.info(f"Final X shape: {X_df.shape}, Final y length: {len(y_series)}")
     if X_df.empty or y_series.empty:
@@ -334,14 +351,10 @@ def main_modeling(config_path: str = "config.yaml") -> None:
     logger.info(f"Splitting data: test_size={split_cfg['test_size']}, random_state={split_cfg['random_state']}")
     try:
         X_train, X_test, y_train, y_test = train_test_split(
-            X_transformed_df, y_series,
+            X_df, y_series,
             test_size=split_cfg.get("test_size", 0.2),
             random_state=split_cfg.get("random_state", 42)
         )
-        print("Type of X_train:", type(X_train))
-        print("Type of X_test:", type(X_test))
-        print("Type of y_train:", type(y_train))
-        print("Type of y_test:", type(y_test))    
     except ValueError as e:
         logger.critical(f"Error during train_test_split: {e}. Check data shapes and consistency. X: {X_df.shape}, y: {y_series.shape}")
         return
@@ -368,7 +381,10 @@ def main_modeling(config_path: str = "config.yaml") -> None:
         logger.critical("Model training failed or no features were selected. Exiting.")
         return
 
+    # --- Evaluate Model using the new evaluator ---
     logger.info(f"Evaluating '{active_model_type}' model on test set...")
+    # The evaluate_statsmodels_model function already logs rounded metrics.
+    # It returns the raw (unrounded) metrics.
     evaluation_metrics = evaluate_statsmodels_model(
         model=trained_model,
         X_eval=X_test,
@@ -378,17 +394,23 @@ def main_modeling(config_path: str = "config.yaml") -> None:
     )
     if not evaluation_metrics or all(pd.isna(v) for v in evaluation_metrics.values()):
         logger.error("Evaluation returned no metrics or all NaN. Check evaluator logs.")
+        # Decide if to proceed with saving NaN metrics or exit
     
     logger.info("Saving model artifacts...")
     save_model_artifacts(trained_model, final_selected_features, evaluation_metrics, config, config_dir)
     
     logger.info(f"Modeling pipeline for '{active_model_type}' completed successfully.")
+    # Log final raw metrics that were saved
     logger.info(f"Final saved metrics (raw): {evaluation_metrics}")
+
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(name)s - %(message)s")
+    
     config_file_path = "config.yaml" 
+    
     if not os.path.exists(config_file_path):
         logging.critical(f"CRITICAL: Main - Configuration file '{config_file_path}' not found. Modeling cannot start.")
     else:
         main_modeling(config_path=config_file_path)
+
