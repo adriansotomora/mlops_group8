@@ -1,10 +1,6 @@
 import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.preprocessing import PolynomialFeatures
-from sklearn.pipeline import Pipeline
-from sklearn.compose import ColumnTransformer
-from sklearn.impute import SimpleImputer
 
 class GenreParser(BaseEstimator, TransformerMixin):
     """Custom transformer to parse genres into binary columns."""
@@ -40,25 +36,12 @@ class GenreParser(BaseEstimator, TransformerMixin):
 # You can add more custom transformers as needed (e.g., for dropping columns, etc.)
 
 def build_feature_pipeline(config):
-    audio_features = config["features"]["audio_features"]
-    genre_features = [f"genre_{g.replace('&', 'and').replace('-', '_')}" for g in config["features"]["genre_features"]]
-
-    audio_poly = Pipeline([
-        ("imputer", SimpleImputer(strategy="mean")),
-        ("poly", PolynomialFeatures(
-            degree=config["features"]["polynomial"]["audio"].get("degree", 2),
-            include_bias=config["features"]["polynomial"]["audio"].get("include_bias", False),
-            interaction_only=config["features"]["polynomial"]["audio"].get("interaction_only", False)
-        ))
-    ])
-
-    preprocessor = ColumnTransformer([
-        ("audio_poly", audio_poly, audio_features),
-        ("genre_passthrough", "passthrough", genre_features),
-    ], remainder="drop")
-
+    # No feature engineering: passthrough pipeline
+    from sklearn.pipeline import Pipeline
+    from sklearn.compose import ColumnTransformer
+    from sklearn.impute import SimpleImputer
+    # Optionally, you can keep genre parsing or imputation if needed, otherwise just passthrough
     pipeline = Pipeline([
-        ("genre_parser", GenreParser()),
-        ("preprocessor", preprocessor)
+        ("passthrough", "passthrough")
     ])
     return pipeline

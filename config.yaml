@@ -1,8 +1,6 @@
-# This file is used to set up the parameters for data loading, logging, and other settings.
-
 main:
   WANDB_PROJECT: mlops_group8
-  WANDB_ENTITY: yeabsiraseleshi-ie-university
+  WANDB_ENTITY: manuelbonnelly-ie-university
   steps: all
   hydra_options: ""
 
@@ -161,7 +159,6 @@ features: # Configuration for feature engineering steps in features.py
   exclude: # Columns to exclude from final feature set (after all transformations)
     - year 
   profiling_variables: # Columns used for profiling, also excluded from final modeling features
-    - track_popularity # This is the target, should not be a feature
     - artist_popularity 
     - energy
     - mode

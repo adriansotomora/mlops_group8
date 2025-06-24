@@ -1,12 +1,9 @@
 {
     "selected_features": [
         "audio_poly__artist_popularity",
-        "genre_passthrough__genre_rock",
         "audio_poly__energy duration_ms",
-        "genre_passthrough__genre_electronic",
-        "genre_passthrough__genre_indie",
-        "genre_passthrough__genre_latin",
-        "genre_passthrough__genre_metal"
+        "audio_poly__speechiness valence",
+        "audio_poly__artist_popularity^2"
     ],
-    "count": 7
+    "count": 4
 }
