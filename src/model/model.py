@@ -25,7 +25,6 @@ from sklearn.model_selection import train_test_split
 project_root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(project_root))
 
-from src.features.pipeline import build_feature_pipeline
 from src.evaluation.evaluator import evaluate_statsmodels_model
 
 
@@ -281,65 +280,41 @@ def main_modeling(config_path: str = "config.yaml") -> None:
     target_column_name = config["target"]
     data_source_cfg = config["data_source"]
 
-    preprocessed_data_path = os.path.join(config_dir, data_source_cfg["processed_path"])
-    logger.info(f"Loading preprocessed data from: {preprocessed_data_path}")
-    try:
-        df = pd.read_csv(preprocessed_data_path)
-    except FileNotFoundError:
-        logger.critical(f"Preprocessed data file not found at '{preprocessed_data_path}'. Exiting.")
+    # --- Load features and target directly from features.csv and preprocessed data ---
+    features_csv_name = art_cfg.get("engineered_features_filename", "features.csv")
+    features_csv_path = features_csv_name if os.path.isabs(features_csv_name) else os.path.join(config_dir, features_csv_name)
+    if not os.path.exists(features_csv_path):
+        logger.critical(f"Features file not found: {features_csv_path}")
         return
-    except Exception as e:
-        logger.critical(f"Error loading preprocessed data from '{preprocessed_data_path}': {e}. Exiting.")
-        return
-    logger.info(f"Preprocessed data loaded. Shape: {df.shape}")
+    X_df = pd.read_csv(features_csv_path)
+    logger.info(f"Loaded features from {features_csv_path} with shape {X_df.shape}")
 
+    # Use only the columns present in features.csv for feature selection and model training
+    # Do not expect or generate any engineered feature names (e.g., audio_poly__...)
+    # Stepwise selection and model training will only use these columns
+
+    # Load target variable from preprocessed data
+    preprocessed_data_path = os.path.join(config_dir, data_source_cfg["processed_path"])
+    df = pd.read_csv(preprocessed_data_path)
     if target_column_name not in df.columns:
         logger.critical(f"Target column '{target_column_name}' not found in preprocessed data. Exiting.")
         return
     y_series = df[target_column_name]
-    X_df = df.drop(columns=[target_column_name])
-    print("RAW FEATURES USED FOR PIPELINE:", X_df.columns.tolist())
-    print("ORDER OF RAW FEATURES:", X_df.columns.tolist())
+    # Align indices if needed
+    if len(X_df) != len(y_series):
+        logger.warning(f"Row count mismatch: features ({len(X_df)}) vs target ({len(y_series)}). Aligning by index.")
+        min_len = min(len(X_df), len(y_series))
+        X_df = X_df.iloc[:min_len].reset_index(drop=True)
+        y_series = y_series.iloc[:min_len].reset_index(drop=True)
+    logger.info(f"Final features shape: {X_df.shape}, target length: {len(y_series)}")
 
-    # Build and fit the feature engineering pipeline
-    pipeline = build_feature_pipeline(config)
-    pipeline.fit(X_df, y_series)
-    print("TRAIN PIPELINE FEATURE NAMES:", pipeline.named_steps["preprocessor"].get_feature_names_out())
-    # --- Correction: Print pipeline output feature names after fitting ---
-    if hasattr(pipeline, "get_feature_names_out"):
-        print("TRAIN PIPELINE FEATURE NAMES:", pipeline.named_steps["preprocessor"].get_feature_names_out())
-    else:
-        print("Pipeline does not have get_feature_names_out")
-    X_transformed = pipeline.transform(X_df)
-    feature_names = pipeline.named_steps["preprocessor"].get_feature_names_out()
-    X_transformed_df = pd.DataFrame(X_transformed, columns=feature_names, index=X_df.index)
-    print("Type of X_transformed_df:", type(X_transformed_df))
-    print("Type of y_series:", type(y_series))
-
-    pipeline_path = os.path.join(config_dir, art_cfg["preprocessing_pipeline"])
-    joblib.dump(pipeline, pipeline_path)
-    logger.info(f"Pipeline saved to {pipeline_path}")
-
-    # If you have a target_df for index alignment, keep this block
-    # (otherwise, comment/remove if not needed)
-    # if not X_df.index.equals(target_df.index):
-    #     logger.warning("Indices of X (from features.csv) and target_df (from preprocessed.csv) do not match.")
-    #     min_len = min(len(X_df), len(y_series))
-    #     if len(X_df) != len(y_series):
-    #          logger.warning(f"X_df length ({len(X_df)}) and y_series length ({len(y_series)}) differ. Truncating to min_len: {min_len}")
-    #     X_df = X_df.iloc[:min_len].reset_index(drop=True)
-    #     y_series = y_series.iloc[:min_len].reset_index(drop=True)
-    #     logger.info("Applied basic alignment by slicing to minimum length and resetting index. Ensure data order is consistent.")
-
-    logger.info(f"Final X shape: {X_df.shape}, Final y length: {len(y_series)}")
-    if X_df.empty or y_series.empty:
-        logger.critical("X or y is empty after loading and alignment attempts. Exiting.")
-        return
+    # Proceed to train/test split and modeling as before, using X_df and y_series
+    # REMOVE all pipeline-related code above this point (do not run build_feature_pipeline, do not use X_transformed_df, etc.)
 
     logger.info(f"Splitting data: test_size={split_cfg['test_size']}, random_state={split_cfg['random_state']}")
     try:
         X_train, X_test, y_train, y_test = train_test_split(
-            X_transformed_df, y_series,
+            X_df, y_series,
             test_size=split_cfg.get("test_size", 0.2),
             random_state=split_cfg.get("random_state", 42)
         )
@@ -402,7 +377,7 @@ def main_modeling(config_path: str = "config.yaml") -> None:
 
     # Log model
     mlflow.statsmodels.log_model(
-        sm_model=trained_model,
+        statsmodels_model=trained_model,
         artifact_path="model",
         registered_model_name=f"{active_model_type}-model"
     )

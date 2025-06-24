@@ -206,6 +206,10 @@ def main_preprocessing(config_path: str = "config.yaml") -> None:
             logger.critical("Data loading via get_raw_data returned empty or None. Exiting.")
             return
         logger.info(f"Full raw data loaded via data_loader. Shape: {full_raw_df.shape}")
+        # Debug: Check liveness/valence after loading
+        for col in ["liveness", "valence"]:
+            if col in full_raw_df.columns:
+                logger.info(f"[DEBUG] After loading: {col} dtype={full_raw_df[col].dtype}, sample={full_raw_df[col].head(5).tolist()}")
     except FileNotFoundError as e:
         logger.critical(f"Failed to load raw data (FileNotFound via data_loader): {e}. Exiting.", exc_info=True)
         return
@@ -249,17 +253,30 @@ def main_preprocessing(config_path: str = "config.yaml") -> None:
         return
 
     current_df = df_for_pipeline.copy()
+    # Debug: Check liveness/valence after holdout split
+    for col in ["liveness", "valence"]:
+        if col in current_df.columns:
+            logger.info(f"[DEBUG] After holdout split: {col} dtype={current_df[col].dtype}, sample={current_df[col].head(5).tolist()}")
 
     logger.info("Data validation (placeholder step)...")
     logger.info("Data validation (placeholder step) complete.")
 
     current_df = drop_columns(current_df, pre_cfg.get("drop_columns", []))
+    # Debug: Check liveness/valence after drop_columns
+    for col in ["liveness", "valence"]:
+        if col in current_df.columns:
+            logger.info(f"[DEBUG] After drop_columns: {col} dtype={current_df[col].dtype}, sample={current_df[col].head(5).tolist()}")
+
     if pre_cfg.get("outlier_removal", {}).get("enabled", False):
         current_df = remove_outliers_iqr(
             current_df,
             pre_cfg["outlier_removal"].get("features", []),
             pre_cfg["outlier_removal"].get("iqr_multiplier", 1.5)
         )
+        # Debug: Check liveness/valence after outlier removal
+        for col in ["liveness", "valence"]:
+            if col in current_df.columns:
+                logger.info(f"[DEBUG] After outlier removal: {col} dtype={current_df[col].dtype}, sample={current_df[col].head(5).tolist()}")
 
     # --- Build and Apply Preprocessing Pipeline ---
     logger.info("Building preprocessing pipeline (imputation + scaling)...")
@@ -300,12 +317,30 @@ def main_preprocessing(config_path: str = "config.yaml") -> None:
         )
 
         logger.info("Fitting and applying preprocessing pipeline...")
-        current_df = pd.DataFrame(
-            preprocessor_artifact.fit_transform(current_df),
-            columns=current_df.columns,
-            index=current_df.index
-        )
+        transformed = preprocessor_artifact.fit_transform(current_df)
+        # Get correct column names after transformation
+        try:
+            feature_names = preprocessor_artifact.get_feature_names_out()
+        except AttributeError:
+            # Fallback for older sklearn: manually combine
+            num_features = [f'num__{col}' for col in numeric_features]
+            passthrough = [col for col in current_df.columns if col not in numeric_features]
+            feature_names = num_features + passthrough
+        current_df = pd.DataFrame(transformed, columns=feature_names, index=current_df.index)
+        # Remove 'num__' and 'remainder__' prefixes from column names for clarity
+        def clean_col(col):
+            if col.startswith('num__'):
+                return col.replace('num__', '', 1)
+            if col.startswith('remainder__'):
+                return col.replace('remainder__', '', 1)
+            return col
+        current_df.columns = [clean_col(col) for col in current_df.columns]
         logger.info("Preprocessing pipeline applied. New shape: %s", current_df.shape)
+        # Debug: Check liveness/valence after pipeline
+        for col in ["liveness", "valence"]:
+            if col in current_df.columns:
+                logger.info(f"[DEBUG] After preprocessing pipeline: {col} dtype={current_df[col].dtype}, sample={current_df[col].head(5).tolist()}")
+        current_df = current_df[current_df.columns]  # No column filtering, just renaming
 
     processed_output_path_relative = data_source_cfg.get("processed_path")
     scaler_artifact_path_relative = art_cfg.get("preprocessing_pipeline")

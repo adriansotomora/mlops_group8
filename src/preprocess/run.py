@@ -1,28 +1,57 @@
-import wandb
-import os
-from datetime import datetime
 import sys
 import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+import wandb
+import logging
+from datetime import datetime
+import hydra
+from omegaconf import DictConfig
 from src.preprocess.preprocessing import main_preprocessing
 
-def main():
-    run_name = f"preprocess_{datetime.now():%Y%m%d_%H%M%S}"
-    run = wandb.init(
-        project=os.environ.get("WANDB_PROJECT", "mlops_group8"),
-        entity=os.environ.get("WANDB_ENTITY", "yeabsiraseleshi-ie-university"),
-        job_type="preprocess",
-        name=run_name,
-    )
-    
+SRC_ROOT = PROJECT_ROOT / "src"
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
+logger = logging.getLogger("preprocess")
+
+
+@hydra.main(config_path=str(PROJECT_ROOT),
+            config_name="config", version_base=None)
+def main(cfg: DictConfig) -> None:
+    dt_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_name = f"preprocess_{dt_str}"
+    run = None
     try:
-        main_preprocessing(config_path="../../config.yaml")
+        run = wandb.init(
+            project=cfg.main.WANDB_PROJECT,
+            entity=cfg.main.WANDB_ENTITY,
+            job_type="preprocess",
+            name=run_name,
+            config=dict(cfg),
+            tags=["preprocess"]
+        )
+        logger.info("Started WandB run: %s", run_name)
+        main_preprocessing(config_path=str(PROJECT_ROOT / "config.yaml"))
         wandb.log({"preprocess_status": "completed"})
     except Exception as e:
-        wandb.log({"preprocess_status": "failed", "error": str(e)})
+        logger.exception("Failed during preprocess step")
+        if run is not None:
+            wandb.log({"preprocess_status": "failed", "error": str(e)})
+            run.alert(title="Preprocess Error", text=str(e))
         raise
     finally:
-        wandb.finish()
+        if wandb.run is not None:
+            wandb.finish()
+            logger.info("WandB run finished")
+
 
 if __name__ == "__main__":
     main()
