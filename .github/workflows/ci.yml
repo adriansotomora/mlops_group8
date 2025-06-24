@@ -12,20 +12,39 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
+    - name: Cache conda
+      uses: actions/cache@v4
+      with:
+        path: ~/conda_pkgs_dir
+        key: ${{ runner.os }}-conda-${{ hashFiles('**/environment.yml') }}
+        restore-keys: |
+          ${{ runner.os }}-conda-
+
     - name: Setup Miniconda
       uses: conda-incubator/setup-miniconda@v2
       with:
         environment-file: conda.yaml
         activate-environment: mlops_group8
         auto-activate-base: false
+        use-only-tar-bz2: true
         
     - name: Install dependencies
       shell: bash -l {0}
       run: |
         conda info
         conda list
+        
+    - name: Run tests
+      shell: bash -l {0}
+      run: |
+        pytest -q
+        
+    - name: Run linting
+      shell: bash -l {0}
+      run: |
+        flake8 . --exit-zero
         
     - name: Run MLflow pipeline
       shell: bash -l {0}
