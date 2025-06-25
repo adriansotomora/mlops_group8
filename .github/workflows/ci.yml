@@ -41,6 +41,6 @@ jobs:
       env:
         WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
         MLOPS_ENV_STAGING: ${{ secrets.MLOPS_ENV_STAGING }}
-        WANDB_MODE: offline
+        WANDB_MODE: online
       run: |
         mlflow run . -e main
