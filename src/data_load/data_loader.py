@@ -17,8 +17,10 @@ logger = logging.getLogger(__name__)
 def load_config(config_path: str = "config.yaml") -> Dict[str, Any]:
     """Load the YAML configuration file."""
     if not os.path.isfile(config_path):
-        logger.error(f"Configuration file not found: {config_path}") 
-        raise FileNotFoundError(f"Configuration file not found: {config_path}")
+        logger.error(f"Configuration file not found: {config_path}")
+        raise FileNotFoundError(f"Configuration file not found: {config_path}.\n"
+                              f"Current working directory: {os.getcwd()}\n"
+                              f"Please ensure the config file exists at the expected path.")
     with open(config_path, "r") as f:
         config = yaml.safe_load(f)
     logger.debug(f"Configuration loaded from {config_path}")
