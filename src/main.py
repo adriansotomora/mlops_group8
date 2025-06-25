@@ -2,7 +2,7 @@
 Main entry point and orchestrator for the MLOps pipeline.
 
 Project entry point and orchestrator for the MLOps pipeline.
-Supports running preprocessing, feature engineering, model training, 
+Supports running preprocessing, feature engineering, model training,
 and batch inference stages.
 """
 
@@ -14,15 +14,12 @@ from omegaconf import DictConfig
 from dotenv import load_dotenv
 from datetime import datetime
 import wandb
-import sys
-import logging
-from typing import Dict, Any
 
 load_dotenv()
 
 PIPELINE_STEPS = [
     "preprocess",
-    "features", 
+    "features",
     "model",
     "evaluation",
     "inference",
@@ -62,9 +59,14 @@ def main(cfg: DictConfig):
                 params["hydra_options"] = hydra_override
 
             print(f"Running step: {step} (W&B run: {run.name})")
-            mlflow.run(step_dir, "main", parameters=params, env_manager="local")
+            mlflow.run(
+                step_dir,
+                "main",
+                parameters=params,
+                env_manager="local")
 
     wandb.finish()
+
 
 if __name__ == "__main__":
     main()

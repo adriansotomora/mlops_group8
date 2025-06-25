@@ -49,7 +49,8 @@ def _validate_column(
         report[col] = col_report
         return
 
-    dataframe = dataframe.dropna(subset=[col])  # Drop rows with NaN in this column
+    # Drop rows with NaN in this column
+    dataframe = dataframe.dropna(subset=[col])
     col_series = dataframe[col]
     col_report["status"] = "present"
 
@@ -57,8 +58,8 @@ def _validate_column(
     dtype_expected = col_schema.get("dtype")
     if dtype_expected and not _is_dtype_compatible(col_series, dtype_expected):
         msg = (
-                f"Column '{col}' has dtype '{col_series.dtype}', expected '{dtype_expected}'"
-            )
+            f"Column '{col}' has dtype '{
+                col_series.dtype}', expected '{dtype_expected}'")
         errors.append(msg)
         col_report["dtype"] = str(col_series.dtype)
         col_report["dtype_expected"] = dtype_expected
@@ -70,14 +71,12 @@ def _validate_column(
     missing_count = col_series.isnull().sum()
     if missing_count > 0:
         if col_schema.get("required", True):
-            msg = (
-                f"Column '{col}' had {missing_count} missing values (required); rows dropped."
-            )
+            msg = (f"Column '{col}' had {
+                missing_count} missing values (required); rows dropped.")
             errors.append(msg)
         else:
-            msg = (
-                f"Column '{col}' had {missing_count} missing values (optional); rows dropped."
-            )
+            msg = (f"Column '{col}' had {
+                missing_count} missing values (optional); rows dropped.")
             warnings.append(msg)
         col_report["missing_count"] = int(missing_count)
         col_report["rows_dropped"] = int(missing_count)
@@ -100,6 +99,7 @@ def _validate_column(
             )
             errors.append(msg)
             col_report["above_max"] = int(above)
+
 
 def validate_data(dataframe, config_dict):
     """Validate dataframe against schema defined in config."""
@@ -167,13 +167,13 @@ def validate_data(dataframe, config_dict):
     # Teaching: You want strict validation in prod, warnings for research
     if errors:
         if action_on_error == "raise":
-            raise ValueError(
-                f"Data validation failed with errors. See {report_path} for details"
-            )
+            raise ValueError(f"Data validation failed with errors. See {
+                report_path} for details")
         elif action_on_error == "warn":
             logger.warning(
                 "Data validation errors detected but proceeding as per config."
             )
+
 
 if __name__ == "__main__":
     import sys

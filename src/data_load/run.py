@@ -1,7 +1,8 @@
 """
 data_load/run.py
 
-MLflow-compatible, modular data loading step with Hydra config, W&B artifact logging, and robust error handling.
+MLflow-compatible, modular data loading step with Hydra config,
+W&B artifact logging, and robust error handling.
 """
 
 import sys
@@ -10,7 +11,7 @@ import hydra
 import wandb
 from omegaconf import DictConfig
 from datetime import datetime
-from data_loader import get_raw_data
+from .data_loader import get_raw_data
 from dotenv import load_dotenv
 from pathlib import Path
 
@@ -26,10 +27,12 @@ logger = logging.getLogger("data_load")
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
-@hydra.main(config_path=str(PROJECT_ROOT), config_name="config", version_base=None)
+@hydra.main(config_path=str(PROJECT_ROOT),
+            config_name="config", version_base=None)
 def main(cfg: DictConfig) -> None:
     """Main function to run the data loading step."""
-    # Config path, output directory, and data file are all resolved from repo root
+    # Config path, output directory, and data file are all resolved from repo
+    # root
     config_path = PROJECT_ROOT / "config.yaml"
 
     output_dir = PROJECT_ROOT / cfg.data_load.output_dir
@@ -37,8 +40,8 @@ def main(cfg: DictConfig) -> None:
 
     raw_path_cfg = Path(cfg.data_source.raw_path)
     resolved_raw_path = (
-        raw_path_cfg if raw_path_cfg.is_absolute() else PROJECT_ROOT / raw_path_cfg
-    )
+        raw_path_cfg if raw_path_cfg.is_absolute() else PROJECT_ROOT /
+        raw_path_cfg)
     if not resolved_raw_path.is_file():
         raise FileNotFoundError(f"Data file not found: {resolved_raw_path}")
 
@@ -60,20 +63,20 @@ def main(cfg: DictConfig) -> None:
 
         # Load data using the get_raw_data function from data_loader.py
         df = get_raw_data(config_path=str(config_path))
-        
+
         if df.empty:
             logger.warning("Loaded dataframe is empty: %s", resolved_raw_path)
         dup_count = df.duplicated().sum()
         if dup_count > 0:
-            logger.warning(
-                f"Duplicates found in data ({dup_count} rows). Consider removing them before use.")
+            logger.warning(f"Duplicates found in data ({
+                dup_count} rows). Consider removing them before use.")
 
         # W&B logging (conditional via config)
         if cfg.data_load.get("log_sample_artifacts", True):
             sample_tbl = wandb.Table(dataframe=df.head(100))
             wandb.log({"sample_rows": sample_tbl})
 
-        if cfg.data_load.get("log_summary_stats", True):
+        if cfg.data_load.get("log_summary_stats", True) and not df.empty:
             stats_tbl = wandb.Table(dataframe=df.describe(
                 include="all").T.reset_index())
             wandb.log({"summary_stats": stats_tbl})

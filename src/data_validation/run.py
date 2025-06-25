@@ -1,9 +1,11 @@
 """
 data_validation/run.py
 
-MLflow-compatible, modular data validation step with Hydra config, W&B logging, and robust error handling.
+MLflow-compatible, modular data validation step with Hydra config,
+W&B logging, and robust error handling.
 """
 
+from .data_validator import validate_data
 import sys
 import logging
 import os
@@ -24,9 +26,8 @@ SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from data_validation.data_validator import validate_data
 
-load_dotenv() 
+load_dotenv()
 
 logging.basicConfig(
     level=logging.INFO,
@@ -41,9 +42,8 @@ def _html_from_report(report: Dict[str, Any]) -> str:
     lines = ["<h2>Data Validation Report</h2>"]
     result = report.get("result", "unknown")
     lines.append(f"<p><b>Result:</b> {result}</p>")
-    lines.append(
-        f"<p>Errors: {len(report.get('errors', []))} | Warnings: {len(report.get('warnings', []))}</p>"
-    )
+    lines.append(f"<p>Errors: {len(report.get('errors', []))} | Warnings: {
+        len(report.get('warnings', []))}</p>")
 
     if report.get("errors"):
         lines.append("<h3>Errors</h3><ul>")
@@ -78,7 +78,8 @@ def _html_from_report(report: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-@hydra.main(config_path=str(PROJECT_ROOT), config_name="config", version_base=None)
+@hydra.main(config_path=str(PROJECT_ROOT),
+            config_name="config", version_base=None)
 def main(cfg: DictConfig) -> None:
     config_path = PROJECT_ROOT / "config.yaml"
 
@@ -123,7 +124,7 @@ def main(cfg: DictConfig) -> None:
             tmp_path = Path(tmp_dir) / "validated_data.csv"
             df.to_csv(tmp_path, index=False)
             val_artifact = wandb.Artifact(
-                cfg.data_validation.output_artifact, 
+                cfg.data_validation.output_artifact,
                 type="dataset"
             )
             val_artifact.add_file(str(tmp_path), name="validated_data.csv")

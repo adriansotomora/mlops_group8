@@ -1,0 +1,10 @@
+artifact_location: file:///C:/Users/manub/OneDrive%20-%20IE%20University/MLOps/mlops_group8/mlruns/0/models/m-5d3ddd470fc54c88a2ac0a0e59b8cc7b/artifacts
+creation_timestamp: 1750877107557
+experiment_id: '0'
+last_updated_timestamp: 1750877109896
+model_id: m-5d3ddd470fc54c88a2ac0a0e59b8cc7b
+model_type: null
+name: model
+source_run_id: 17198023c2ad4ca985b28411f3e494d6
+status: 3
+status_message: null

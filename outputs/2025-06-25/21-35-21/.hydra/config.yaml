@@ -1,0 +1,218 @@
+main:
+  WANDB_PROJECT: mlops_group8
+  WANDB_ENTITY: manuelbonnelly-ie-university
+  steps: all
+  hydra_options: ''
+data_source:
+  raw_path: data/raw/Songs_2025.csv
+  processed_path: data/processed/Songs_2025_processed.csv
+  type: csv
+  delimiter: ','
+  header: 0
+  encoding: utf-8
+  inference_holdout_path: data/raw_holdout/inference_holdout_data.csv
+  inference_holdout_size: 0.1
+logging:
+  level: INFO
+  log_file: logs/pipeline_main.log
+  format: '%(asctime)s - %(levelname)s - %(name)s - %(module)s - %(message)s'
+  datefmt: '%Y-%m-%d %H:%M:%S'
+data_load:
+  output_dir: data/processed
+data_validation:
+  input_artifact: raw_data:latest
+  output_artifact: validated_data
+  report_path: logs/validation_report.json
+  enabled: true
+  action_on_error: raise
+  schema:
+    columns:
+    - name: year
+      dtype: int
+      required: true
+      min: 2000
+      max: 2025
+    - name: track_name
+      dtype: str
+      required: true
+    - name: track_popularity
+      dtype: int
+      required: true
+      min: 0
+      max: 100
+    - name: album
+      dtype: str
+      required: true
+    - name: artist_name
+      dtype: str
+      required: true
+    - name: artist_genres
+      dtype: str
+      required: true
+    - name: artist_popularity
+      dtype: int
+      required: true
+      min: 0
+      max: 100
+    - name: danceability
+      dtype: float
+      required: true
+      min: 0.0
+      max: 1.0
+    - name: energy
+      dtype: float
+      required: true
+      min: 0.0
+      max: 1.0
+    - name: key
+      dtype: float
+      required: true
+      min: 0.0
+      max: 11.0
+    - name: loudness
+      dtype: float
+      required: true
+      min: -60.0
+    - name: mode
+      dtype: float
+      required: true
+      min: 0.0
+      max: 1.0
+    - name: speechiness
+      dtype: float
+      required: true
+      min: 0.0
+      max: 1.0
+    - name: acousticness
+      dtype: float
+      required: true
+      min: 0.0
+      max: 1.0
+    - name: instrumentalness
+      dtype: float
+      required: true
+      min: 0.0
+      max: 1.0
+    - name: liveness
+      dtype: float
+      required: true
+      min: 0.0
+      max: 1.0
+    - name: valence
+      dtype: float
+      required: true
+      min: 0.0
+      max: 1.0
+    - name: tempo
+      dtype: float
+      required: true
+      min: 0.0
+    - name: duration_ms
+      dtype: float
+      required: true
+      min: 0.0
+data_split:
+  test_size: 0.2
+  valid_size: 0.2
+  random_state: 42
+model:
+  active: linear_regression
+  logistic_regression:
+    save_path: models/logistic_regression.pkl
+    selected_features_path: models/logistic_regression_selected_features.json
+    params: {}
+  knn:
+    save_path: models/knn.pkl
+    selected_features_path: models/knn_selected_features.json
+    params: {}
+  kmeans:
+    save_path: models/kmeans.pkl
+    k_min: 1
+    k_max: 10
+    n_clusters: 3
+    random_state: 42
+  linear_regression:
+    save_path: models/linear_regression.pkl
+    selected_features_path: models/linear_regression_selected_features.json
+    stepwise:
+      enabled: true
+      threshold_in: 0.05
+      threshold_out: 0.1
+      verbose: true
+features:
+  exclude:
+  - year
+  profiling_variables:
+  - artist_popularity
+  - energy
+  - mode
+  drop:
+  - track_name
+  - album
+  - artist_name
+  - cluster
+  - artist_genres
+  audio_features:
+  - danceability
+  - energy
+  - liveness
+  - loudness
+  - speechiness
+  - tempo
+  - valence
+  - duration_ms
+  - artist_popularity
+  genre_features:
+  - pop
+  - rock
+  - electronic
+  - latin
+  - hip-hop
+  - indie
+  - jazz
+  - r&b
+  - metal
+  - classic
+  - country
+  polynomial:
+    audio:
+      degree: 2
+      include_bias: false
+      interaction_only: false
+    genre:
+      degree: 2
+      include_bias: false
+      interaction_only: false
+target: track_popularity
+metrics:
+- mse
+- r2
+preprocessing:
+  drop_columns:
+  - instrumentalness
+  outlier_removal:
+    enabled: true
+    features:
+    - duration_ms
+    - track_popularity
+    iqr_multiplier: 1.5
+  scale:
+    columns:
+    - danceability
+    - energy
+    - loudness
+    - speechiness
+    - acousticness
+    - liveness
+    - valence
+    - tempo
+    - duration_ms
+    - key
+    method: minmax
+artifacts:
+  metrics_path: models/metrics.json
+  preprocessing_pipeline: models/preprocessing_pipeline.pkl
+  splits_dir: data/splits
+  processed_dir: data/processed
+  engineered_features_filename: features.csv
+  feature_list_filename: feature_list.txt
