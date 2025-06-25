@@ -118,8 +118,8 @@ def test_create_polynomial_features_adds_columns(): # Removed tmp_path
     df_with_genres = features.parse_genres(df.copy(), config_for_poly, features.logger) 
     
     df_with_poly = features.create_polynomial_features(df_with_genres, config_for_poly, features.logger)
-    assert any(c.startswith("poly_audio_") for c in df_with_poly.columns)
-    assert any(c.startswith("poly_genre_") for c in df_with_poly.columns)
+    assert any(c.startswith("audio_poly_") for c in df_with_poly.columns)
+    assert any(c.startswith("genre_poly_") for c in df_with_poly.columns)
 
 
 @patch.object(features, 'logger', MagicMock())
@@ -181,11 +181,11 @@ def test_main_features_e2e(tmp_path: Path): # Use Path type hint
 
     df_out = pd.read_csv(engineered_features_output_path)
     assert "dropme_in_features" not in df_out.columns
-    assert any(c.startswith("poly_audio_") for c in df_out.columns), "No audio polynomial features found."
+    assert any(c.startswith("audio_poly_") for c in df_out.columns), "No audio polynomial features found."
     
     # Check for a specific polynomial genre feature if its base was created
     if "genre_pop" in df_out.columns: 
-         assert any(c.startswith("poly_genre_genre_pop") for c in df_out.columns), "No pop polynomial features found."
+         assert any(c.startswith("genre_poly_") for c in df_out.columns), "No pop polynomial features found."
     
     with open(feature_list_output_path, 'r') as f:
         logged_features = [line.strip() for line in f.readlines()]
