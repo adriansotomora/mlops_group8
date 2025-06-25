@@ -204,11 +204,19 @@ def run_inference(input_csv_path: str, config_path: str, output_csv_path: str) -
             current_df_to_scale = current_df[actual_columns_to_scale]
             if hasattr(scaler, 'feature_names_in_'):
                 scaler_expected_features = list(scaler.feature_names_in_)
-                # Ensure columns are in the order the scaler expects
+                # Add missing columns as 0.0 (or np.nan if you prefer)
+                for col in scaler_expected_features:
+                    if col not in current_df_to_scale.columns:
+                        logger.warning(f"Adding missing column '{col}' to input for scaler, filled with 0.0.")
+                        current_df_to_scale[col] = 0.0
+                # Reorder columns to match scaler's expected order
                 current_df_to_scale = current_df_to_scale[scaler_expected_features]
-            transformed_data = scaler.transform(current_df_to_scale)
-            current_df[actual_columns_to_scale] = transformed_data
-        except Exception as e: # More specific error handling for ValueError was here before
+                transformed_data = scaler.transform(current_df_to_scale)
+                current_df[scaler_expected_features] = transformed_data
+            else:
+                transformed_data = scaler.transform(current_df_to_scale)
+                current_df[actual_columns_to_scale] = transformed_data
+        except Exception as e:
             logger.error(f"Error applying scaler: {e}")
             return
     else:
@@ -218,13 +226,18 @@ def run_inference(input_csv_path: str, config_path: str, output_csv_path: str) -
     current_df = parse_genres(current_df, config, logger)
     current_df = features_drop_columns(current_df, config, logger) 
     current_df = create_polynomial_features(current_df, config, logger)
+    logger.info(f"Columns after polynomial feature creation: {current_df.columns.tolist()}")
+
     logger.info(f"Shape after feature engineering: {current_df.shape}")
 
     logger.info(f"Selecting final features for prediction: {final_selected_features_list}")
+    logger.info(f"Available columns after feature engineering: {current_df.columns.tolist()}")
     missing_model_features = [f for f in final_selected_features_list if f not in current_df.columns]
     if missing_model_features:
         logger.critical(f"Required model features missing from transformed data: {missing_model_features}")
         return
+    else:
+        logger.info(f"All required model features are present for inference. Proceeding with prediction.")
     X_inference = current_df[final_selected_features_list].astype(float) 
 
     X_inference_const = sm.add_constant(X_inference, has_constant='add')

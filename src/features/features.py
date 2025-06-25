@@ -131,11 +131,11 @@ def create_polynomial_features(df: pd.DataFrame, config: Dict[str, Any], logger_
         prefix = ""
         if poly_type == "audio":
             base_feature_names_config = features_section.get("audio_features", [])
-            prefix = "poly_audio_"
+            prefix = "audio_poly__"
         elif poly_type == "genre":
             genre_base_names = features_section.get("genre_features", [])
             base_feature_names_config = [f"genre_{g.replace('&', 'and').replace('-', '_')}" for g in genre_base_names]
-            prefix = "poly_genre_"
+            prefix = "genre_poly__"
         
         actual_base_features = [
             name for name in base_feature_names_config 
