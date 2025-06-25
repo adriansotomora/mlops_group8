@@ -1,121 +1,221 @@
-MLOps Group 8 - Spotify Music Popularity Prediction🎵 Project OverviewThis MLOps project aims to predict the popularity of songs on Spotify using various audio features. A linear regression model is trained to estimate track_popularity based on attributes like danceability, energy, tempo, and engineered genre or polynomial features.The project follows MLOps best practices, featuring a modular pipeline that includes:Initial raw data loading (via data_loader.py).Data validation (placeholder, structure exists for data_validator.py).Preprocessing, including a split to create a holdout set for inference testing (preprocessing.py).Configurable feature engineering (features.py).Model training (currently Linear Regression with Stepwise Selection using statsmodels - in model.py).Model evaluation (using evaluator.py).Batch inference on new or holdout data, including prediction intervals (inferencer.py).The entire pipeline is orchestrated by src/main.py, and the repository is structured for reproducibility and maintainability, complete with a comprehensive test suite and configuration-driven components.🛠️ Tech StackPython Version: 3.10Core Libraries:Pandas: Data manipulation and analysis.NumPy: Numerical operations.Scikit-learn: Preprocessing (scaling), model splitting.Statsmodels: Linear regression modeling and statistical analysis.Joblib: Saving/loading scikit-learn objects (e.g., scalers).PyYAML: Configuration management.Testing:Pytest: Test framework.Pytest-Cov: Test coverage.Environment Management: CondaLinting/Formatting: Flake8, Black (recommended, included in environment.yml)📁 Project Structuremlops_group8/
-├── config.yaml                # Main configuration file for all pipeline stages
-├── environment.yml            # Conda environment specification
-├── README.md                  # This file
+# MLOps Group 8 - Spotify Music Popularity Prediction
+
+[![CI](https://github.com/adriansotomora/mlops_group8/actions/workflows/ci.yml/badge.svg)](https://github.com/adriansotomora/mlops_group8/actions/workflows/ci.yml)
+
+This repository provides a modular, **production-quality** MLOps pipeline for Spotify music popularity prediction, built as part of an academic project in MLOps fundamentals. The codebase is designed to bridge the gap between research prototypes (Jupyter notebooks) and scalable, maintainable machine learning systems in production.
+
+---
+
+## 🚦 Project Status
+
+**Phase 1: Modularization, Testing, and Best Practices**
+- Jupyter notebook translated into well-documented, test-driven Python modules
+- End-to-end pipeline: data ingestion, validation, preprocessing, feature engineering, model training, evaluation, and batch inference
+- Robust configuration via `config.yaml` and reproducibility through explicit artifact management
+- Extensive unit testing with pytest (89 total tests)
+- Strict adherence to software engineering and MLOps best practices
+
+**Phase 2: Hydra, MLflow, and W&B Integration**
+- All pipeline steps now execute as MLflow runs
+- Dynamic configuration managed with Hydra
+- Metrics and artifacts automatically logged to Weights & Biases
+- Automated training pipeline with CI/CD workflows
+
+**Phase 3: CI/CD and FastAPI Serving**
+- GitHub Actions workflow with automated testing and linting
+- FastAPI application (`app/main.py`) exposes prediction and health endpoints
+- Includes `/predict_batch` route for validating and scoring multiple records
+- Docker containerization for scalable deployment
+
+---
+
+## 📁 Repository Structure
+
+```text
+.
+├── README.md
+├── config.yaml                  # Central pipeline configuration
+├── environment.yml              # Reproducible conda environment
+├── conda.yaml                   # MLflow conda environment
+├── dvc.yaml                     # Data Version Control pipeline
+├── Dockerfile                   # Container deployment
 ├── data/
-│   ├── raw/                   # Original, immutable data (e.g., Songs_2025.csv)
-│   ├── raw_holdout/           # Raw data split off for inference testing (e.g., inference_holdout_data.csv)
-│   ├── processed/             # Intermediate and final processed datasets
-│   │   ├── Songs_2025_processed.csv # Output of preprocessing.py (main data)
-│   │   └── features.csv             # Output of features.py (engineered features for model)
-│   └── predictions/           # Output of inference runs (e.g., holdout_predictions_with_intervals.csv)
-├── logs/                      # Log files for pipeline runs
-│   ├── main_orchestrator.log  # Log for the src/main.py orchestrator
-│   ├── preprocessing.log      # Specific logs for preprocessing.py
-│   ├── features.log           # Specific logs for features.py
-│   ├── model.log              # Specific logs for model.py
-│   └── inference.log          # Specific logs for inferencer.py
-├── models/                    # Saved model artifacts
-│   ├── preprocessing_pipeline.pkl # Scaler from preprocessing
-│   ├── linear_regression.pkl      # Trained model
-│   ├── linear_regression_selected_features.json # Features used by the model
-│   └── metrics.json               # Evaluation metrics
-├── notebooks/                 # Jupyter notebooks for exploration and analysis (if any)
-├── src/                       # Source code for the pipeline
-│   ├── __init__.py
-│   ├── data_load/
-│   │   ├── __init__.py
-│   │   └── data_loader.py     # Loads initial raw data
-│   ├── data_validation/       # Data validation scripts (currently placeholder)
-│   │   ├── __init__.py
-│   │   └── data_validator.py  # Example, actual implementation may vary
-│   ├── preprocess/
-│   │   ├── __init__.py
-│   │   └── preprocessing.py   # Preprocesses data, creates holdout, saves scaler
-│   ├── features/
-│   │   ├── __init__.py
-│   │   └── features.py        # Performs feature engineering
-│   ├── model/
-│   │   ├── __init__.py
-│   │   └── model.py           # Trains and evaluates the model
-│   ├── evaluation/
-│   │   ├── __init__.py
-│   │   └── evaluator.py       # Calculates regression metrics
-│   ├── inference/
-│   │   ├── __init__.py
-│   │   └── inferencer.py      # Runs batch inference with prediction intervals
-│   └── main.py                # Main pipeline orchestrator script (PREFERRED ENTRY POINT)
-└── tests/                     # Test suite
-    ├── __init__.py
+│   ├── raw/                     # Original Spotify songs dataset
+│   ├── raw_holdout/             # Holdout data for inference testing
+│   ├── processed/               # Intermediate processed datasets
+│   └── predictions/             # Model prediction outputs
+├── models/                      # Serialized models and preprocessing artifacts
+├── logs/                        # Pipeline execution logs and validation reports
+├── app/
+│   └── main.py                  # FastAPI application for model serving
+├── .github/workflows/           # GitHub Actions CI/CD pipeline
+├── src/
+│   ├── data_load/               # Data ingestion utilities
+│   ├── data_validation/         # Schema and data quality validation
+│   ├── preprocess/              # Data preprocessing and scaling
+│   ├── features/                # Feature engineering (polynomial, genre parsing)
+│   ├── model/                   # Model training with stepwise selection
+│   ├── evaluation/              # Model evaluation and metrics calculation
+│   ├── inference/               # Batch inference with prediction intervals
+│   └── main.py                  # Pipeline orchestrator
+└── tests/                       # Comprehensive unit and integration tests
+```
 
-## Quick Start
+Artifact paths in `config.yaml` such as `data/processed`, `models/`, and `logs/` are resolved relative to this project root. Generated metrics, preprocessing pipelines, and trained models are versioned and stored under these directories.
 
-### Prerequisites
-- Conda or Miniconda installed
-- Git
-- Docker (optional, for containerized deployment)
+---
 
-### Setup Environment
+## 🔬 Problem Description
+
+The pipeline predicts **Spotify track popularity** (0-100 scale) based on audio features and metadata. It applies rigorous validation and modular design suitable for research, teaching, and real-world deployment scenarios.
+
+### Data Dictionary
+
+| Feature           | Description                                                    | Type      | Range/Values           |
+|-------------------|----------------------------------------------------------------|-----------|------------------------|
+| track_popularity  | Target variable: Spotify popularity score                     | int       | 0-100                  |
+| danceability      | How suitable a track is for dancing                           | float     | 0.0-1.0                |
+| energy            | Perceptual measure of intensity and power                      | float     | 0.0-1.0                |
+| loudness          | Overall loudness of track in decibels                         | float     | min: -60.0             |
+| speechiness       | Presence of spoken words in a track                           | float     | 0.0-1.0                |
+| acousticness      | Confidence measure of whether track is acoustic               | float     | 0.0-1.0                |
+| liveness          | Detects presence of audience in recording                      | float     | 0.0-1.0                |
+| valence           | Musical positiveness conveyed by track                        | float     | 0.0-1.0                |
+| tempo             | Overall estimated tempo in beats per minute                   | float     | min: 0.0               |
+| duration_ms       | Track duration in milliseconds                                | float     | min: 0.0               |
+| artist_popularity | Popularity of the artist                                       | int       | 0-100                  |
+| key               | Key the track is in (using standard Pitch Class notation)     | float     | 0.0-11.0               |
+| mode              | Major (1) or minor (0) modality                               | float     | 0.0-1.0                |
+| artist_genres     | List of genres associated with the artist                     | str       | Genre strings          |
+
+*Engineered features include genre dummy variables and polynomial combinations of audio features.*
+
+---
+
+## 🛠️ Pipeline Modules
+
+### 0. Pipeline Orchestration (`src/main.py`)
+- Single entry point orchestrating the entire MLOps workflow
+- Supports configurable pipeline stages via Hydra configuration
+- MLflow project execution with parameter passing and artifact tracking
+- Robust logging and error handling for production environments
+
+### 1. Data Loading (`src/data_load/data_loader.py`)
+- Loads Spotify songs data from CSV with configurable parameters
+- Environment variable management for secure configurations
+- Comprehensive error handling and logging
+
+### 2. Data Validation (`src/data_validation/data_validator.py`)
+- Schema validation: column types, ranges, missing values, data quality checks
+- Configurable strictness: `raise` or `warn` on validation errors
+- Detailed validation reports (JSON) with HTML summaries logged to W&B
+- Ensures data integrity throughout the pipeline
+
+### 3. Data Preprocessing (`src/preprocess/preprocessing.py`)
+- Raw data cleaning and outlier removal using IQR method
+- Train/test/holdout splitting with stratification
+- Feature scaling (MinMax/Standard) with sklearn pipelines
+- Creates inference holdout set for unbiased evaluation
+
+### 4. Feature Engineering (`src/features/features.py`)
+- Genre parsing from artist metadata into dummy variables
+- Polynomial feature generation for audio features interaction
+- Configurable feature selection and exclusion rules
+- Feature importance tracking and documentation
+
+### 5. Model Training (`src/model/model.py`)
+- Linear regression with stepwise feature selection using statsmodels
+- Automated feature selection based on statistical significance
+- Model registry supporting multiple algorithms (easily extensible)
+- Hyperparameter tracking and model versioning
+
+### 6. Model Evaluation (`src/evaluation/evaluator.py`)
+- Comprehensive regression metrics: RMSE, MAE, R², Adjusted R²
+- Residual analysis and prediction interval calculations
+- Model performance visualization and reporting
+- Statistical validation of model assumptions
+
+### 7. Batch Inference (`src/inference/inferencer.py`)
+- Loads preprocessing and model artifacts for new data prediction
+- Applies identical transformations to ensure consistency
+- Generates predictions with 95% confidence intervals
+- Exports results with original data for analysis
+
+### 8. Unit Testing (`tests/`)
+- Comprehensive pytest suite covering all modules (89 total tests)
+- Mock data generation for isolated testing
+- CI/CD integration with coverage requirements
+
+---
+
+## ⚙️ Configuration and Reproducibility
+
+- **config.yaml**: Centralized configuration for all pipeline parameters
+- **environment.yml**: Reproducible Conda environment with exact versions
+- **MLflow Projects**: Reproducible pipeline execution with parameter tracking
+- **W&B Artifacts**: Versioned data, models, and experiment artifacts
+- **Hydra**: Dynamic configuration overrides and environment management
+
+---
+
+## 🚀 Quickstart
+
+**Environment setup:**
 ```bash
-# Clone the repository
-git clone https://github.com/hiroinie/mlops_group8.git
+# Clone repository
+git clone https://github.com/adriansotomora/mlops_group8.git
 cd mlops_group8
 
 # Create and activate conda environment
 conda env create -f environment.yml
 conda activate group8_full
 
-# Set up environment variables (copy and edit)
-cp .env.example .env
-# Edit .env with your WANDB_API_KEY and other settings
+# Set up environment variables (optional - values also configured in config.yaml)
+# Create .env file with your Weights & Biases credentials:
+# WANDB_API_KEY=your_wandb_api_key
+# Alternatively, update config.yaml with your WANDB_ENTITY
+
+# Authenticate with Weights & Biases
+wandb login
 ```
 
-### Run the Pipeline
-
-#### Using MLflow Projects (Recommended)
+**Run end-to-end pipeline:**
 ```bash
-# Run complete training pipeline
-mlflow run . --no-conda
+# Run complete pipeline using MLflow (recommended)
+mlflow run . -P steps=all
 
-# Run specific steps
-mlflow run . -P steps="preprocess,features,model" --no-conda
-```
-
-#### Using Direct Python Execution
-```bash
-# Run complete training pipeline
-python src/main.py
+# Run via Python with Hydra
+python main.py main.steps=all
 
 # Run specific stages
-python src/main.py --stage preprocess
-python src/main.py --stage features
-python src/main.py --stage model
-python src/main.py --stage inference --input_file data/raw_holdout/inference_holdout_data.csv --output_file data/predictions/predictions.csv
+mlflow run . -P steps="preprocess,features,model"
+
+# Run with hyperparameter overrides using MLflow
+mlflow run . -e main_with_override -P steps=all -P hydra_options="model.linear_regression.stepwise.threshold_in=0.01"
 ```
 
-### API Serving
+All steps automatically log metrics and artifacts to W&B. The pipeline creates a holdout dataset during preprocessing for unbiased inference testing.
 
-#### Start FastAPI Server
+**Run inference:**
 ```bash
-# Start the API server
+# Batch inference on new data
+python src/main.py main.steps=inference
+
+# Direct inference script
+python -m src.inference.inferencer --input data/raw_holdout/inference_holdout_data.csv --output data/predictions/results.csv
+```
+
+**Serve model via FastAPI:**
+```bash
+# Start API server
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 
-# Or using Docker
-docker build -t mlops-group8-api .
-docker run -p 8000:8000 mlops-group8-api
-```
-
-#### API Endpoints
-- `GET /` - Welcome message
-- `GET /health` - Health check and model status
-- `POST /predict` - Single prediction
-- `POST /predict_batch` - Batch predictions
-
-Example prediction request:
-```bash
+# Test single prediction
 curl -X POST "http://localhost:8000/predict" \
      -H "Content-Type: application/json" \
      -d '{
+       "artist_popularity": 63,
+       "genre": "rock",
        "danceability": 0.735,
        "energy": 0.578,
        "liveness": 0.0985,
@@ -124,77 +224,109 @@ curl -X POST "http://localhost:8000/predict" \
        "tempo": 75.0,
        "valence": 0.471,
        "duration_ms": 207959.0,
-       "artist_popularity": 63,
        "acousticness": 0.514,
        "key": 1.0
      }'
 ```
 
-### Experiment Tracking
-
-View experiments and model performance at: [Weights & Biases Project](https://wandb.ai/hiroinie/mlops_group8_spotify_prediction)
-
-### Testing
+**Run tests:**
 ```bash
-# Run tests with coverage
+# Run all tests with coverage
 pytest --cov=src --cov-report=term-missing
 
 # Run linting
 flake8 .
 ```
 
+---
 
-    ├── mock_data/
-    │   └── mock_data_spotify.csv # Mock data for testing various components
-    ├── test_data_loader.py
-    ├── test_preprocessing.py
-    ├── test_features.py
-    ├── test_model.py
-    ├── test_evaluator.py
-    └── test_inferencer.py
-(Note: The main.py in the project root is considered deprecated in favor of src/main.py for better module organization).🚀 Getting Started1. Environment SetupThis project uses Python 3.10. Dependencies are managed with Conda and listed in environment.yml.To set up the Conda environment:conda env create -f environment.yml
-conda activate mlops_group8
-2. ConfigurationThe pipeline behavior is controlled by config.yaml. Before running, review and customize this file as needed. It defines:Paths for input data (raw, processed), output artifacts (models, scalers, predictions), and logs.Parameters for data splitting (test size, holdout size for inference).Preprocessing steps: columns to drop, outlier removal settings, scaling method and columns.Feature engineering settings: genre parsing, polynomial feature creation, columns to exclude.Model parameters: active model type, stepwise selection thresholds for linear regression.Data validation schema (if data_validator.py is fully implemented).⚙️ Pipeline UsageThe primary entry point for the pipeline is src/main.py. It orchestrates the execution of different stages based on command-line arguments. Always run commands from the project root directory.Training PipelineThe training pipeline involves data preprocessing, feature engineering, model training, and evaluation.Run the Entire Training Pipeline:This executes all training stages sequentially. A holdout dataset for inference testing is also created during the preprocessing stage.python -m src.main --stage all_training 
-(The --config config.yaml argument is used by default if config.yaml is in the root.)Run Individual Training Stages:Preprocessing: Loads raw data via data_loader.py, creates the inference holdout set, preprocesses the main dataset, and saves the processed data and scaler.python -m src.main --stage preprocess
-Feature Engineering: Loads the output of the preprocessing stage, engineers new features, and saves the final feature set. (Requires preprocessing to be completed).python -m src.main --stage features
-Model Training & Evaluation: Loads engineered features, trains the model, evaluates it using evaluator.py, and saves model artifacts. (Requires preprocessing and feature engineering to be completed).python -m src.main --stage model
-Inference PipelineAfter a model has been trained and its artifacts (model, scaler, selected features list) are saved, you can run inference on new, unseen data or the holdout set using inferencer.py, orchestrated by main.py.Running Inference via main.py:The inference stage requires specifying an input data file and an output path for predictions.python -m src.main --stage inference --input_file <path_to_input_data.csv> --output_file <path_to_save_predictions.csv>
-Example (using the holdout data created by preprocessing.py):(Assumes data_source.inference_holdout_path in config.yaml is, e.g., data/raw_holdout/inference_holdout_data.csv)python -m src.main --stage inference \
-                   --input_file data/raw_holdout/inference_holdout_data.csv \
-                   --output_file data/predictions/holdout_predictions_with_intervals.csv
-The inference process will apply all necessary data transformations using the saved scaler and feature configurations before generating predictions and prediction intervals. The output CSV will include the original data along with prediction, prediction_pi_lower, and prediction_pi_upper columns.✅ TestingA comprehensive test suite is located in the tests/ directory. Each core module has corresponding test files (e.g., test_preprocessing.py, test_inferencer.py).Running All Tests:From the project root directory, execute:python -m pytest -v
-This command discovers and runs all tests with verbose output.Running Tests with Coverage:To generate a code coverage report (ensure pytest-cov is installed):python -m pytest -v --cov=src --cov-report=term-missing --cov-report=html
-This shows a terminal summary and creates a detailed HTML report in the htmlcov/ directory.📦 Artifact LocationsKey artifacts generated and used by the pipeline are stored in the following default locations (customizable in config.yaml):Data:Raw data: data/raw/Songs_2025.csv (or as per data_source.raw_path)Raw holdout data (for inference): data/raw_holdout/inference_holdout_data.csv (or as per data_source.inference_holdout_path)Preprocessed data (output of preprocessing.py): data/processed/Songs_2025_processed.csv (or as per data_source.processed_path)Engineered features (output of features.py): data/processed/features.csv (or as per artifacts.engineered_features_filename)Feature list (output by features.py): data/processed/feature_list.txt (or as per artifacts.feature_list_filename)Predictions (output of inferencer.py): data/predictions/ (path specified via CLI)Models & Related Artifacts:Preprocessing scaler: models/preprocessing_pipeline.pkl (or as per artifacts.preprocessing_pipeline)Trained model: models/linear_regression.pkl (or as per model.linear_regression.save_path)Selected features list (for model): models/linear_regression_selected_features.json (or as per model.linear_regression.selected_features_path)Evaluation metrics: models/metrics.json (or as per artifacts.metrics_path)Logs: logs/ (e.g., logs/main_orchestrator.log, logs/preprocessing.log, etc., as defined in logging.log_file in config.yaml or per script defaults)🤝 ContributingContributions are welcome! Please follow these general guidelines:Fork the repository.Create your feature branch: git checkout -b feature/your-amazing-featureCommit your changes: git commit -am 'Add some amazing feature'Push to the branch: git push origin feature/your-amazing-featureOpen a Pull Request against the main branch for review.Please adhere to code quality standards by using black for code formatting and flake8 for linting. Ensure that new features are accompanied by relevant tests and that all existing tests pass.
+## 🐳 Docker Deployment
 
-### Experiment Tracking
+Before building, set environment variables in `.env`:
 
-View experiments and model performance at: [Weights & Biases Project](https://wandb.ai/hiroinie/mlops_group8_spotify_prediction)
+```bash
+WANDB_PROJECT=mlops_group8
+WANDB_ENTITY=your-entity
+WANDB_API_KEY=your-api-key
+```
 
-## MLOps Features
+Build and run Docker container:
+```bash
+# Build image
+docker build -t spotify-popularity-api .
 
-### Hydra Configuration Management
-- Centralized configuration in `config.yaml`
-- Runtime parameter overrides via CLI
-- Environment-specific configurations
+# Run container
+docker run --env-file .env -p 8000:8000 spotify-popularity-api
+```
 
-### MLflow Projects Integration
-- Reproducible pipeline execution with `mlflow run .`
-- Step-by-step orchestration via individual MLproject files
-- Parameter passing and artifact tracking
+The server automatically detects the `PORT` environment variable, making it compatible with cloud platforms like Render, Heroku, or AWS ECS.
 
-### Weights & Biases Experiment Tracking
-- Automatic experiment logging and versioning
-- Model performance metrics and artifacts
-- Run comparison and analysis dashboards
+---
 
-### FastAPI Model Serving
-- REST API endpoints for real-time predictions
-- Batch prediction support
-- Health checks and model status monitoring
-- Docker containerization for deployment
+## 📈 Next Steps
 
-### CI/CD Pipeline
-- Automated testing with coverage requirements (≥75%)
-- Linting and code quality checks
-- MLflow pipeline validation
-- GitHub Actions integration
+- **Model Enhancement**: Implement additional algorithms (Random Forest, XGBoost) based on current model registry
+- **Model Monitoring**: Enhance logging and metrics tracking for production deployments
+- **Automated Deployment**: Extend CI/CD pipeline for automatic model deployment
+- **Feature Store**: Centralized feature management and versioning
+- **Performance Optimization**: Pipeline efficiency improvements and caching
+
+---
+
+## 📚 Academic and Teaching Notes
+
+- **Course**: MBD-EN2024ELECTIVOS-MBDMCSBT_38E88_467445 - MLOPS: MACHINE LEARNING OPERATIONS
+- **Institution**: IE University
+- **Best Practices**: Demonstrates academic excellence in MLOps engineering, suitable for production deployment
+- **Extensibility**: Configuration-driven architecture enables easy extension for advanced MLOps topics
+- **Assessment**: Comprehensive test suite and documentation support peer evaluation and grading
+
+### Learning Objectives Achieved:
+1. **Pipeline Modularization**: Jupyter notebook → Production-ready modules
+2. **MLOps Toolchain**: MLflow, W&B, Hydra integration
+3. **CI/CD Implementation**: Automated testing and deployment
+4. **Model Serving**: RESTful API with FastAPI
+5. **Reproducibility**: Environment and experiment management
+
+---
+
+## 👩‍💻 Authors and Acknowledgments
+
+**Group 8 Members:**
+- ADRIAN SOTO MORA
+- MANUEL EDUARDO BONNELLY SANCHEZ  
+- SERGIO LEBED WRIGHT
+- YEABSIRA SELESHI
+- HIROMITSU FUJIYAMA
+
+**Course Information:**
+- **Institution**: IE University
+- **Program**: Master in Big Data & Analytics
+- **Course**: MLOPS: Machine Learning Operations
+- **Academic Year**: 2024-2025
+
+**Acknowledgments:**
+- Course instructors for MLOps fundamentals and best practices
+- Spotify for providing rich audio feature datasets
+- Open-source MLOps community for tools and methodologies
+
+---
+
+## 📜 License
+
+This project is developed for academic and educational purposes as part of the IE University MLOps course. 
+
+**Academic Use License:**
+- ✅ Educational and research use permitted
+- ✅ Code sharing within academic community encouraged  
+- ✅ Modification and extension for learning purposes allowed
+- ❌ Commercial use prohibited without explicit permission
+- ❌ Distribution outside academic context requires attribution
+
+For questions, collaborations, or commercial licensing inquiries, please contact the authors or course instructors.
+
+---
+
+**Project Repository**: [https://github.com/adriansotomora/mlops_group8](https://github.com/adriansotomora/mlops_group8)
+
+**Experiment Tracking**: [Weights & Biases Project](https://wandb.ai/manuelbonnelly-ie-university/mlops_group8)
