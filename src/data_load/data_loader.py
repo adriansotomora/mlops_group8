@@ -14,6 +14,7 @@ from typing import Dict, Any
 # Module-level logger. Assumes configuration by the calling script or __main__.
 logger = logging.getLogger(__name__)
 
+
 def load_config(config_path: str = "config.yaml") -> Dict[str, Any]:
     """Load the YAML configuration file."""
     if not os.path.isfile(config_path):
@@ -25,6 +26,7 @@ def load_config(config_path: str = "config.yaml") -> Dict[str, Any]:
         config = yaml.safe_load(f)
     logger.debug(f"Configuration loaded from {config_path}")
     return config
+
 
 def _read_csv_data(
     path: str,
@@ -39,19 +41,25 @@ def _read_csv_data(
     if not os.path.isfile(path):
         logger.error(f"Data file does not exist: {path}")
         raise FileNotFoundError(f"Data file not found: {path}")
-    
+
     try:
-        df = pd.read_csv(path, delimiter=delimiter, header=header, encoding=encoding)
+        df = pd.read_csv(
+            path,
+            delimiter=delimiter,
+            header=header,
+            encoding=encoding)
         logger.info(f"Loaded data from CSV: {path}, shape={df.shape}")
         return df
     except Exception as e:
-        logger.error(f"Failed to load data from CSV '{path}': {e}", exc_info=True)
-        raise # Re-raise after logging
+        logger.error(f"Failed to load data from CSV '{
+                     path}': {e}", exc_info=True)
+        raise  # Re-raise after logging
+
 
 def get_raw_data(config_path: str = "config.yaml") -> pd.DataFrame:
     """
     Load the raw dataset based on specifications in the configuration file.
-    
+
     Primarily intended for loading the initial raw CSV data for the pipeline.
     """
     try:
@@ -71,9 +79,8 @@ def get_raw_data(config_path: str = "config.yaml") -> pd.DataFrame:
 
     file_type = data_cfg.get("type", "csv").lower()
     if file_type != "csv":
-        logger.error(
-            f"Unsupported file type in config: '{file_type}'. Only 'csv' supported."
-        )
+        logger.error(f"Unsupported file type in config: '{
+            file_type}'. Only 'csv' supported.")
         raise ValueError(
             f"Unsupported file type: '{file_type}'. "
             "This loader only supports 'csv'."
@@ -82,7 +89,8 @@ def get_raw_data(config_path: str = "config.yaml") -> pd.DataFrame:
     raw_data_path = data_cfg.get("raw_path")
     if not raw_data_path or not isinstance(raw_data_path, str):
         logger.error("Config missing 'data_source.raw_path'.")
-        raise ValueError("Config must specify 'data_source.raw_path' for raw data.")
+        raise ValueError(
+            "Config must specify 'data_source.raw_path' for raw data.")
 
     # Resolve the raw_data_path relative to the config file's location.
     config_dir = os.path.dirname(os.path.abspath(config_path))
@@ -109,11 +117,12 @@ if __name__ == "__main__":
     logger.info("Running data_loader.py standalone...")
 
     try:
-        # Assumes config.yaml is in the current working directory when run standalone.
+        # Assumes config.yaml is in the current working directory when run
+        # standalone.
         raw_df = get_raw_data()
         logger.info(
-            "Raw data loaded successfully via __main__. Shape: %s", raw_df.shape
-        )
+            "Raw data loaded successfully via __main__. Shape: %s",
+            raw_df.shape)
         logger.info(
             "First 5 rows of loaded data:\n%s", raw_df.head().to_string()
         )
