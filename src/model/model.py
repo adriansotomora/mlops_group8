@@ -218,7 +218,27 @@ def save_model_artifacts(
     model_cfg = config["model"]
     art_cfg = config["artifacts"]
     active_model_type = model_cfg["active"] 
-    
+
+    # --- Feature presence check ---
+    features_csv_name = art_cfg.get("engineered_features_filename", "features.csv")
+    features_csv_path = features_csv_name if os.path.isabs(features_csv_name) else os.path.join(config_dir, features_csv_name)
+    if not os.path.exists(features_csv_path):
+        logger.critical(f"Features file not found for verification: {features_csv_path}")
+        raise FileNotFoundError(f"Features file not found: {features_csv_path}")
+    features_df = pd.read_csv(features_csv_path)
+    missing_features = [f for f in selected_features if f not in features_df.columns]
+    if missing_features:
+        logger.critical(
+            f"Selected features not found in features.csv: {missing_features}. Aborting artifact saving."
+        )
+        raise ValueError(
+            f"Selected features not found in features.csv: {missing_features}"
+        )
+    else:
+        logger.info(
+            f"All selected features are present in features.csv. Selected features: {selected_features}"
+        )
+
     model_save_path_rel = model_cfg[active_model_type]["save_path"]
     model_save_path = os.path.join(config_dir, model_save_path_rel)
     model_dir = os.path.dirname(model_save_path)
@@ -378,8 +398,7 @@ def main_modeling(config_path: str = "config.yaml") -> None:
     # Log model
     mlflow.statsmodels.log_model(
         statsmodels_model=trained_model,
-        artifact_path="model",
-        registered_model_name=f"{active_model_type}-model"
+        artifact_path="model"
     )
 
     # W&B Logging

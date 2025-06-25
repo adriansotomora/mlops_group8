@@ -3,7 +3,7 @@ name: mlflow_orchestration
 channels:
   - conda-forge
 dependencies:
-  - python=3.10.17
+  - python
   - pandas
   - scikit-learn
   - hydra-core
