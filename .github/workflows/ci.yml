@@ -44,3 +44,27 @@ jobs:
         WANDB_MODE: online
       run: |
         mlflow run . -e main
+
+  testing_pipeline:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Cache conda
+      uses: actions/cache@v4
+      with:
+        path: ~/conda_pkgs_dir
+        key: ${{ runner.os }}-conda-${{ hashFiles('**/conda.yaml') }}
+        restore-keys: |
+          ${{ runner.os }}-conda-
+      
+    - name: Run tests
+      shell: bash -l {0}
+      run: |
+        pytest -q
+        
+    - name: Run linting
+      shell: bash -l {0}
+      run: |
+        flake8 . --exit-zero
